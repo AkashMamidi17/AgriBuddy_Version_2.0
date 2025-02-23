@@ -28,7 +28,7 @@ export default function VoiceAssistant() {
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
   const { toast } = useToast();
-  const { isConnected, error, sendMessage, wsRef } = useWebSocket('/ws');
+  const { isConnected, error, wsRef } = useWebSocket('/ws');
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -61,14 +61,18 @@ export default function VoiceAssistant() {
           reader.onload = async () => {
             if (typeof reader.result === 'string') {
               const base64Audio = reader.result.split(',')[1];
+              console.log('Audio recorded and converted to base64');
 
-              if (isConnected && wsRef.current) {
+              if (wsRef.current?.readyState === WebSocket.OPEN) {
                 setIsProcessing(true);
                 wsRef.current.send(JSON.stringify({
                   type: 'voice_input',
                   audio: base64Audio,
                   language
                 }));
+                console.log('Sent audio data to server');
+              } else {
+                throw new Error('WebSocket is not connected');
               }
             }
           };
@@ -79,7 +83,7 @@ export default function VoiceAssistant() {
           setIsProcessing(false);
           toast({
             title: "Processing Error",
-            description: "Failed to process audio data",
+            description: `Failed to process audio: ${err.message}`,
             variant: "destructive",
           });
         }
@@ -87,6 +91,7 @@ export default function VoiceAssistant() {
 
       mediaRecorder.current.start();
       setIsListening(true);
+      console.log('Started recording');
     } catch (err) {
       console.error('Failed to start recording:', err);
       toast({
@@ -98,8 +103,9 @@ export default function VoiceAssistant() {
   };
 
   const stopRecording = () => {
-    if (mediaRecorder.current && mediaRecorder.current.state === 'recording') {
+    if (mediaRecorder.current?.state === 'recording') {
       mediaRecorder.current.stop();
+      console.log('Stopped recording');
       setIsListening(false);
 
       // Stop all tracks in the stream
@@ -117,6 +123,7 @@ export default function VoiceAssistant() {
 
         if (data.type === 'ai_response') {
           const { text, response, audioResponse, imageUrl } = data.content;
+          console.log('Processing AI response:', { text, response, hasAudio: !!audioResponse, hasImage: !!imageUrl });
 
           // Add user's message
           setMessages(prev => [...prev, { type: 'sent', text }]);
@@ -126,6 +133,7 @@ export default function VoiceAssistant() {
             try {
               const audio = new Audio(`data:audio/mp3;base64,${audioResponse}`);
               await audio.play();
+              console.log('Playing audio response');
             } catch (error) {
               console.error('Failed to play audio:', error);
             }
@@ -139,6 +147,7 @@ export default function VoiceAssistant() {
             imageUrl
           }]);
         } else if (data.type === 'error') {
+          console.error('Server error:', data.message);
           toast({
             title: "Processing Error",
             description: data.message,
@@ -150,6 +159,11 @@ export default function VoiceAssistant() {
       } catch (error) {
         console.error('Failed to handle message:', error);
         setIsProcessing(false);
+        toast({
+          title: "Error",
+          description: "Failed to process server response",
+          variant: "destructive",
+        });
       }
     };
 
