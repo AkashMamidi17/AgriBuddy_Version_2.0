@@ -1,9 +1,12 @@
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import VoiceAssistant from "@/components/voice-assistant";
+import CropManagement from "@/components/feature-sections/crop-management";
+import EquipmentSection from "@/components/feature-sections/equipment-section";
+import WeatherUpdates from "@/components/feature-sections/weather-updates";
+import MarketInsights from "@/components/feature-sections/market-insights";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sprout, Tractor, Sun, Cloud } from "lucide-react"; // Changed Plant to Sprout
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -30,54 +33,11 @@ export default function HomePage() {
           </Card>
 
           {/* Features Grid */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card>
-              <CardHeader>
-                <Sprout className="w-8 h-8 text-green-600" />
-                <CardTitle>Crop Management</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600">
-                  Track your crops and get personalized recommendations
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <Tractor className="w-8 h-8 text-green-600" />
-                <CardTitle>Equipment</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600">
-                  Modern farming techniques and equipment guides
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <Sun className="w-8 h-8 text-yellow-500" />
-                <CardTitle>Weather Updates</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600">
-                  Real-time weather forecasts for better planning
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <Cloud className="w-8 h-8 text-blue-500" />
-                <CardTitle>Market Insights</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600">
-                  Latest market trends and pricing information
-                </p>
-              </CardContent>
-            </Card>
+          <div className="grid md:grid-cols-2 gap-6">
+            <CropManagement />
+            <EquipmentSection />
+            <WeatherUpdates />
+            <MarketInsights />
           </div>
 
           {/* Knowledge Base */}
