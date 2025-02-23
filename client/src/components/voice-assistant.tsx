@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Mic, MicOff, Wifi, WifiOff, Volume2 } from "lucide-react";
+import { Mic, MicOff, Wifi, WifiOff, Volume2, Loader2 } from "lucide-react";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -48,29 +48,41 @@ export default function VoiceAssistant() {
       audioChunks.current = [];
 
       mediaRecorder.current.ondataavailable = (event) => {
-        audioChunks.current.push(event.data);
+        if (event.data.size > 0) {
+          audioChunks.current.push(event.data);
+        }
       };
 
       mediaRecorder.current.onstop = async () => {
-        const audioBlob = new Blob(audioChunks.current, { type: 'audio/wav' });
-        const reader = new FileReader();
+        try {
+          const audioBlob = new Blob(audioChunks.current, { type: 'audio/wav' });
+          const reader = new FileReader();
 
-        reader.onload = async () => {
-          if (typeof reader.result === 'string') {
-            const base64Audio = reader.result.split(',')[1];
+          reader.onload = async () => {
+            if (typeof reader.result === 'string') {
+              const base64Audio = reader.result.split(',')[1];
 
-            if (isConnected) {
-              setIsProcessing(true);
-              sendMessage(JSON.stringify({
-                type: 'voice_input',
-                audio: base64Audio,
-                language
-              }));
+              if (isConnected) {
+                setIsProcessing(true);
+                sendMessage(JSON.stringify({
+                  type: 'voice_input',
+                  audio: base64Audio,
+                  language
+                }));
+              }
             }
-          }
-        };
+          };
 
-        reader.readAsDataURL(audioBlob);
+          reader.readAsDataURL(audioBlob);
+        } catch (err) {
+          console.error('Failed to process audio:', err);
+          setIsProcessing(false);
+          toast({
+            title: "Processing Error",
+            description: "Failed to process audio data",
+            variant: "destructive",
+          });
+        }
       };
 
       mediaRecorder.current.start();
@@ -89,48 +101,69 @@ export default function VoiceAssistant() {
     if (mediaRecorder.current && mediaRecorder.current.state === 'recording') {
       mediaRecorder.current.stop();
       setIsListening(false);
+
+      // Stop all tracks in the stream
+      mediaRecorder.current.stream.getTracks().forEach(track => track.stop());
     }
   };
 
   useEffect(() => {
-    const ws = WebSocket as any;
-    if (!ws.OPEN) return;
-
     const messageHandler = async (event: MessageEvent) => {
-      const data = JSON.parse(event.data);
+      try {
+        const data = JSON.parse(event.data);
 
-      if (data.type === 'ai_response') {
-        const { text, response, audioResponse, imageUrl } = data.content;
+        if (data.type === 'ai_response') {
+          const { text, response, audioResponse, imageUrl } = data.content;
 
-        // Add user's message
-        setMessages(prev => [...prev, { type: 'sent', text }]);
+          // Add user's message
+          setMessages(prev => [...prev, { type: 'sent', text }]);
 
-        // Create audio from response
-        const audio = new Audio(`data:audio/mp3;base64,${audioResponse}`);
-        await audio.play();
+          // Create audio from response
+          if (audioResponse) {
+            const audio = new Audio(`data:audio/mp3;base64,${audioResponse}`);
+            await audio.play();
+          }
 
-        // Add AI's response with audio and optional image
-        setMessages(prev => [...prev, {
-          type: 'received',
-          text: response,
-          audioUrl: `data:audio/mp3;base64,${audioResponse}`,
-          imageUrl
-        }]);
+          // Add AI's response with audio and optional image
+          setMessages(prev => [...prev, {
+            type: 'received',
+            text: response,
+            audioUrl: audioResponse ? `data:audio/mp3;base64,${audioResponse}` : undefined,
+            imageUrl
+          }]);
+        } else if (data.type === 'error') {
+          toast({
+            title: "Processing Error",
+            description: data.message,
+            variant: "destructive",
+          });
+        }
 
+        setIsProcessing(false);
+      } catch (error) {
+        console.error('Failed to handle message:', error);
         setIsProcessing(false);
       }
     };
 
     if (isConnected) {
-      const socket = new WebSocket(ws);
-      socket.addEventListener('message', messageHandler);
-      return () => socket.removeEventListener('message', messageHandler);
+      window.addEventListener('message', messageHandler);
+      return () => window.removeEventListener('message', messageHandler);
     }
-  }, [isConnected]);
+  }, [isConnected, toast]);
 
   const playAudio = async (audioUrl: string) => {
-    const audio = new Audio(audioUrl);
-    await audio.play();
+    try {
+      const audio = new Audio(audioUrl);
+      await audio.play();
+    } catch (error) {
+      console.error('Failed to play audio:', error);
+      toast({
+        title: "Playback Error",
+        description: "Failed to play audio response",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -166,8 +199,17 @@ export default function VoiceAssistant() {
               </>
             ) : (
               <>
-                <Mic className="h-4 w-4 mr-2" />
-                {isProcessing ? "Processing..." : "Start Voice Assistant"}
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Mic className="h-4 w-4 mr-2" />
+                    Start Voice Assistant
+                  </>
+                )}
               </>
             )}
           </Button>

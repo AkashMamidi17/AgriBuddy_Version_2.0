@@ -1,5 +1,4 @@
 import OpenAI from "openai";
-import { createReadStream } from "fs";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -7,7 +6,7 @@ export async function processVoiceInput(audioBuffer: Buffer, sourceLanguage: str
   try {
     // 1. Convert audio to text using Whisper
     const transcription = await openai.audio.transcriptions.create({
-      file: createReadStream(audioBuffer),
+      file: new Blob([audioBuffer], { type: 'audio/wav' }),
       model: "whisper-1",
       language: sourceLanguage,
     });
@@ -17,7 +16,7 @@ export async function processVoiceInput(audioBuffer: Buffer, sourceLanguage: str
       model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024
       messages: [
         {
-          role: "system",
+          role: "system", 
           content: `You are AgriBuddy, a multilingual farming assistant specializing in agricultural advice. 
           Respond in the same language as the user's query. Focus on providing practical, region-specific farming advice.
           Format responses to be easily readable and actionable.`
@@ -46,7 +45,7 @@ export async function processVoiceInput(audioBuffer: Buffer, sourceLanguage: str
     const speech = await openai.audio.speech.create({
       model: "tts-1",
       voice: "alloy",
-      input: completion.choices[0].message.content,
+      input: completion.choices[0].message.content || "",
     });
 
     // Get audio as base64
