@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Mic, MicOff, Wifi, WifiOff } from "lucide-react";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useToast } from "@/hooks/use-toast";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const teluguResponses = {
   greet: "నమస్కారం! నేను మీకు ఎలా సహాయం చేయగలను?",
@@ -40,6 +41,7 @@ export default function VoiceAssistant() {
 
         setTranscript(transcript);
 
+        // Send transcript to WebSocket for processing
         if (isConnected) {
           sendMessage(JSON.stringify({ type: 'transcript', content: transcript }));
           let response = teluguResponses.default;
@@ -146,24 +148,26 @@ export default function VoiceAssistant() {
         </div>
 
         {(transcript || lastResponse) && (
-          <div className="mt-4 space-y-2">
-            {transcript && (
-              <>
-                <p className="text-sm font-medium text-gray-700">You said:</p>
-                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-                  {transcript}
-                </p>
-              </>
-            )}
-            {lastResponse && (
-              <>
-                <p className="text-sm font-medium text-gray-700">Assistant responded:</p>
-                <p className="text-sm text-green-600 bg-green-50 p-3 rounded-lg">
-                  {lastResponse}
-                </p>
-              </>
-            )}
-          </div>
+          <ScrollArea className="mt-4 h-[200px]">
+            <div className="space-y-2">
+              {transcript && (
+                <>
+                  <p className="text-sm font-medium text-gray-700">You said:</p>
+                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                    {transcript}
+                  </p>
+                </>
+              )}
+              {lastResponse && (
+                <>
+                  <p className="text-sm font-medium text-gray-700">Assistant responded:</p>
+                  <p className="text-sm text-green-600 bg-green-50 p-3 rounded-lg">
+                    {lastResponse}
+                  </p>
+                </>
+              )}
+            </div>
+          </ScrollArea>
         )}
       </CardContent>
     </Card>
