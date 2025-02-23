@@ -28,7 +28,7 @@ export default function VoiceAssistant() {
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
   const { toast } = useToast();
-  const { isConnected, error, sendMessage } = useWebSocket('/ws');
+  const { isConnected, error, sendMessage, wsRef } = useWebSocket('/ws');
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -62,9 +62,9 @@ export default function VoiceAssistant() {
             if (typeof reader.result === 'string') {
               const base64Audio = reader.result.split(',')[1];
 
-              if (isConnected) {
+              if (isConnected && wsRef.current) {
                 setIsProcessing(true);
-                sendMessage(JSON.stringify({
+                wsRef.current.send(JSON.stringify({
                   type: 'voice_input',
                   audio: base64Audio,
                   language
@@ -108,9 +108,12 @@ export default function VoiceAssistant() {
   };
 
   useEffect(() => {
-    const messageHandler = async (event: MessageEvent) => {
+    if (!wsRef.current) return;
+
+    const handleMessage = async (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
+        console.log('Received WebSocket message:', data);
 
         if (data.type === 'ai_response') {
           const { text, response, audioResponse, imageUrl } = data.content;
@@ -120,8 +123,12 @@ export default function VoiceAssistant() {
 
           // Create audio from response
           if (audioResponse) {
-            const audio = new Audio(`data:audio/mp3;base64,${audioResponse}`);
-            await audio.play();
+            try {
+              const audio = new Audio(`data:audio/mp3;base64,${audioResponse}`);
+              await audio.play();
+            } catch (error) {
+              console.error('Failed to play audio:', error);
+            }
           }
 
           // Add AI's response with audio and optional image
@@ -146,11 +153,13 @@ export default function VoiceAssistant() {
       }
     };
 
-    if (isConnected) {
-      window.addEventListener('message', messageHandler);
-      return () => window.removeEventListener('message', messageHandler);
-    }
-  }, [isConnected, toast]);
+    wsRef.current.addEventListener('message', handleMessage);
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.removeEventListener('message', handleMessage);
+      }
+    };
+  }, [wsRef, toast]);
 
   const playAudio = async (audioUrl: string) => {
     try {

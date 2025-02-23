@@ -6,14 +6,16 @@ export async function processVoiceInput(audioBuffer: Buffer, sourceLanguage: str
   try {
     // 1. Convert audio to text using Whisper
     const transcription = await openai.audio.transcriptions.create({
-      file: new Blob([audioBuffer], { type: 'audio/wav' }),
+      file: new File([audioBuffer], 'audio.wav', { type: 'audio/wav' }),
       model: "whisper-1",
       language: sourceLanguage,
     });
 
+    console.log("Transcription successful:", transcription.text);
+
     // 2. Get AI response using GPT-4
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024
+      model: "gpt-4", // Fixed model name
       messages: [
         {
           role: "system", 
@@ -29,9 +31,11 @@ export async function processVoiceInput(audioBuffer: Buffer, sourceLanguage: str
       max_tokens: 500,
     });
 
+    console.log("GPT response received");
+
     // 3. Generate image if needed (for visual explanations)
     let imageUrl = null;
-    if (completion.choices[0].message.content.includes("[GENERATE_IMAGE]")) {
+    if (completion.choices[0].message.content?.includes("[GENERATE_IMAGE]")) {
       const image = await openai.images.generate({
         model: "dall-e-3",
         prompt: `Agricultural visualization: ${completion.choices[0].message.content}`,
@@ -39,6 +43,7 @@ export async function processVoiceInput(audioBuffer: Buffer, sourceLanguage: str
         size: "1024x1024",
       });
       imageUrl = image.data[0].url;
+      console.log("Image generated:", imageUrl);
     }
 
     // 4. Convert response to speech
@@ -47,6 +52,8 @@ export async function processVoiceInput(audioBuffer: Buffer, sourceLanguage: str
       voice: "alloy",
       input: completion.choices[0].message.content || "",
     });
+
+    console.log("Speech generation successful");
 
     // Get audio as base64
     const audioResponse = Buffer.from(await speech.arrayBuffer()).toString('base64');
@@ -59,6 +66,6 @@ export async function processVoiceInput(audioBuffer: Buffer, sourceLanguage: str
     };
   } catch (error) {
     console.error("AI processing error:", error);
-    throw new Error("Failed to process voice input");
+    throw new Error(`Failed to process voice input: ${error.message}`);
   }
 }
