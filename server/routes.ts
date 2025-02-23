@@ -4,6 +4,7 @@ import { WebSocketServer } from "ws";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { insertProductSchema, insertPostSchema, insertBidSchema } from "@shared/schema";
+import { processVoiceInput } from "./ai-assistant";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -91,20 +92,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   wss.on('connection', (ws) => {
     console.log('Client connected to WebSocket');
 
-    ws.on('message', (message) => {
-      const data = JSON.parse(message.toString());
+    ws.on('message', async (message) => {
+      try {
+        const data = JSON.parse(message.toString());
 
-      // Handle voice assistant messages
-      if (data.type === 'transcript') {
-        // Echo back the transcript to all connected clients
-        wss.clients.forEach((client) => {
-          if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({
-              type: 'response',
-              content: `Received: ${data.content}`
-            }));
-          }
-        });
+        if (data.type === 'voice_input') {
+          const result = await processVoiceInput(
+            Buffer.from(data.audio, 'base64'),
+            data.language
+          );
+
+          ws.send(JSON.stringify({
+            type: 'ai_response',
+            content: result
+          }));
+        }
+        //This section is from the original code and needs to be kept for backward compatibility
+        if (data.type === 'transcript') {
+          // Echo back the transcript to all connected clients
+          wss.clients.forEach((client) => {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(JSON.stringify({
+                type: 'response',
+                content: `Received: ${data.content}`
+              }));
+            }
+          });
+        }
+      } catch (error) {
+        console.error('WebSocket message handling error:', error);
+        ws.send(JSON.stringify({
+          type: 'error',
+          message: error.message
+        }));
       }
     });
 

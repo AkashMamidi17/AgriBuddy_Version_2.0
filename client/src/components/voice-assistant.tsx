@@ -1,111 +1,35 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Mic, MicOff, Wifi, WifiOff } from "lucide-react";
+import { Mic, MicOff, Wifi, WifiOff, Volume2 } from "lucide-react";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-const teluguResponses = {
-  greet: "నమస్కారం! నేను మీకు ఎలా సహాయం చేయగలను?",
-  weather: "నేడు వాతావరణం చల్లగా ఉంటుంది, వర్షం పడే అవకాశం ఉంది.",
-  crops: "మీ పంటల గురించి చెప్పండి, నేను సలహా ఇస్తాను.",
-  market: "ప్రస్తుతం మార్కెట్లో ధరలు స్థిరంగా ఉన్నాయి.",
-  help: "నేను మీకు వ్యవసాయం, వాతావరణం, మార్కెట్ ధరల గురించి సమాచారం ఇవ్వగలను.",
-  default: "క్షమించండి, నాకు అర్థం కాలేదు. దయచేసి మళ్లీ చెప్పండి.",
-  goodbye: "మళ్ళీ కలుద్దాం! మంచి రోజు కావాలని కోరుకుంటున్నాను."
-};
+interface Message {
+  type: 'sent' | 'received';
+  text: string;
+  audioUrl?: string;
+  imageUrl?: string;
+}
 
 export default function VoiceAssistant() {
   const [isListening, setIsListening] = useState(false);
-  const [transcript, setTranscript] = useState("");
-  const [recognition, setRecognition] = useState<any>(null);
-  const [lastResponse, setLastResponse] = useState("");
+  const [language, setLanguage] = useState("te");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const mediaRecorder = useRef<MediaRecorder | null>(null);
+  const audioChunks = useRef<Blob[]>([]);
   const { toast } = useToast();
   const { isConnected, error, sendMessage } = useWebSocket('/ws');
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && "webkitSpeechRecognition" in window) {
-      const SpeechRecognition = (window as any).webkitSpeechRecognition;
-      const recognitionInstance = new SpeechRecognition();
-
-      recognitionInstance.continuous = true;
-      recognitionInstance.interimResults = true;
-      recognitionInstance.lang = "te-IN"; // Telugu language
-
-      recognitionInstance.onresult = (event: any) => {
-        const transcript = Array.from(event.results)
-          .map((result: any) => result[0])
-          .map((result: any) => result.transcript)
-          .join("");
-
-        setTranscript(transcript);
-
-        // Send transcript to WebSocket for processing
-        if (isConnected) {
-          sendMessage(JSON.stringify({ type: 'transcript', content: transcript }));
-          let response = teluguResponses.default;
-
-          // Enhanced keyword matching for better Telugu interaction
-          if (transcript.includes("నమస్కారం") || transcript.includes("హలో")) {
-            response = teluguResponses.greet;
-          } else if (transcript.includes("వాతావరణం")) {
-            response = teluguResponses.weather;
-          } else if (transcript.includes("పంట") || transcript.includes("వ్యవసాయం")) {
-            response = teluguResponses.crops;
-          } else if (transcript.includes("మార్కెట్") || transcript.includes("ధర")) {
-            response = teluguResponses.market;
-          } else if (transcript.includes("సహాయం") || transcript.includes("ఏమి చేయగలవు")) {
-            response = teluguResponses.help;
-          } else if (transcript.includes("వీడ్కోలు") || transcript.includes("సెలవు")) {
-            response = teluguResponses.goodbye;
-          }
-
-          setLastResponse(response);
-          speak(response);
-        }
-      };
-
-      recognitionInstance.onerror = (event: any) => {
-        console.error("Speech recognition error", event.error);
-        setIsListening(false);
-        toast({
-          title: "Voice Recognition Error",
-          description: `Failed to recognize voice: ${event.error}`,
-          variant: "destructive",
-        });
-      };
-
-      setRecognition(recognitionInstance);
-    } else {
-      toast({
-        title: "Browser Not Supported",
-        description: "Your browser doesn't support voice recognition",
-        variant: "destructive",
-      });
-    }
-  }, [isConnected, sendMessage]);
-
-  const toggleListening = () => {
-    if (!recognition) return;
-
-    if (isListening) {
-      recognition.stop();
-      setIsListening(false);
-      speak(teluguResponses.goodbye);
-    } else {
-      recognition.start();
-      setIsListening(true);
-      speak(teluguResponses.greet);
-    }
-  };
-
-  const speak = (text: string) => {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "te-IN"; // Telugu language
-    utterance.rate = 0.9; // Slightly slower for better clarity
-    window.speechSynthesis.speak(utterance);
-  };
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (error) {
@@ -117,20 +41,122 @@ export default function VoiceAssistant() {
     }
   }, [error, toast]);
 
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder.current = new MediaRecorder(stream);
+      audioChunks.current = [];
+
+      mediaRecorder.current.ondataavailable = (event) => {
+        audioChunks.current.push(event.data);
+      };
+
+      mediaRecorder.current.onstop = async () => {
+        const audioBlob = new Blob(audioChunks.current, { type: 'audio/wav' });
+        const reader = new FileReader();
+
+        reader.onload = async () => {
+          if (typeof reader.result === 'string') {
+            const base64Audio = reader.result.split(',')[1];
+
+            if (isConnected) {
+              setIsProcessing(true);
+              sendMessage(JSON.stringify({
+                type: 'voice_input',
+                audio: base64Audio,
+                language
+              }));
+            }
+          }
+        };
+
+        reader.readAsDataURL(audioBlob);
+      };
+
+      mediaRecorder.current.start();
+      setIsListening(true);
+    } catch (err) {
+      console.error('Failed to start recording:', err);
+      toast({
+        title: "Recording Error",
+        description: "Failed to access microphone. Please check your permissions.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder.current && mediaRecorder.current.state === 'recording') {
+      mediaRecorder.current.stop();
+      setIsListening(false);
+    }
+  };
+
+  useEffect(() => {
+    const ws = WebSocket as any;
+    if (!ws.OPEN) return;
+
+    const messageHandler = async (event: MessageEvent) => {
+      const data = JSON.parse(event.data);
+
+      if (data.type === 'ai_response') {
+        const { text, response, audioResponse, imageUrl } = data.content;
+
+        // Add user's message
+        setMessages(prev => [...prev, { type: 'sent', text }]);
+
+        // Create audio from response
+        const audio = new Audio(`data:audio/mp3;base64,${audioResponse}`);
+        await audio.play();
+
+        // Add AI's response with audio and optional image
+        setMessages(prev => [...prev, {
+          type: 'received',
+          text: response,
+          audioUrl: `data:audio/mp3;base64,${audioResponse}`,
+          imageUrl
+        }]);
+
+        setIsProcessing(false);
+      }
+    };
+
+    if (isConnected) {
+      const socket = new WebSocket(ws);
+      socket.addEventListener('message', messageHandler);
+      return () => socket.removeEventListener('message', messageHandler);
+    }
+  }, [isConnected]);
+
+  const playAudio = async (audioUrl: string) => {
+    const audio = new Audio(audioUrl);
+    await audio.play();
+  };
+
   return (
     <Card className="w-full md:w-auto bg-white/95 backdrop-blur-sm shadow-lg">
       <CardContent className="p-4">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 mb-4">
           {isConnected ? (
             <Wifi className="h-4 w-4 text-green-500" />
           ) : (
             <WifiOff className="h-4 w-4 text-red-500" />
           )}
+          <Select value={language} onValueChange={setLanguage}>
+            <SelectTrigger className="w-32">
+              <SelectValue placeholder="Language" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="te">Telugu</SelectItem>
+              <SelectItem value="en">English</SelectItem>
+              <SelectItem value="hi">Hindi</SelectItem>
+            </SelectContent>
+          </Select>
           <Button
-            onClick={toggleListening}
+            onClick={isListening ? stopRecording : startRecording}
             variant={isListening ? "destructive" : "default"}
             className="relative bg-gradient-to-r from-green-500 to-blue-500 text-white hover:from-green-600 hover:to-blue-600"
-            disabled={!isConnected}
+            disabled={!isConnected || isProcessing}
           >
             {isListening ? (
               <>
@@ -141,34 +167,52 @@ export default function VoiceAssistant() {
             ) : (
               <>
                 <Mic className="h-4 w-4 mr-2" />
-                Start Voice Assistant
+                {isProcessing ? "Processing..." : "Start Voice Assistant"}
               </>
             )}
           </Button>
         </div>
 
-        {(transcript || lastResponse) && (
-          <ScrollArea className="mt-4 h-[200px]">
-            <div className="space-y-2">
-              {transcript && (
-                <>
-                  <p className="text-sm font-medium text-gray-700">You said:</p>
-                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-                    {transcript}
-                  </p>
-                </>
-              )}
-              {lastResponse && (
-                <>
-                  <p className="text-sm font-medium text-gray-700">Assistant responded:</p>
-                  <p className="text-sm text-green-600 bg-green-50 p-3 rounded-lg">
-                    {lastResponse}
-                  </p>
-                </>
-              )}
-            </div>
-          </ScrollArea>
-        )}
+        <ScrollArea className="h-[300px] pr-4" ref={scrollAreaRef}>
+          <div className="space-y-4">
+            {messages.map((message, index) => (
+              <div
+                key={index}
+                className={`flex flex-col ${
+                  message.type === 'sent' ? 'items-end' : 'items-start'
+                }`}
+              >
+                <div
+                  className={`rounded-lg p-3 max-w-[80%] ${
+                    message.type === 'sent'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-100 text-gray-800'
+                  }`}
+                >
+                  <p>{message.text}</p>
+                  {message.audioUrl && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => playAudio(message.audioUrl!)}
+                    >
+                      <Volume2 className="h-4 w-4 mr-2" />
+                      Play Audio
+                    </Button>
+                  )}
+                  {message.imageUrl && (
+                    <img
+                      src={message.imageUrl}
+                      alt="AI Generated Visual"
+                      className="mt-2 rounded-lg max-w-full"
+                    />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
       </CardContent>
     </Card>
   );
