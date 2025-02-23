@@ -1,0 +1,27 @@
+The home page is good but others were not functioning is static, i need   responsive design . Everything or every component should have its function.                                       
+ There is no community for farmers, there is no market place to bid, etc,.. its just static page so try to make make it responsive and make every component to function.            
+Try to use API's whenever information need, try to gather data from web,google and API's.     
+ You can use AI or API's which can take voice prompts from user and give output as voice or audios,  and perform tasks by users voice prompts.                                       
+ provide an AI voice Assistantant which can understand multiple languages( mainly telugu)  and can speak to user.                             
+
+1.Voice-Powered Farming Assistant:
+
+ Imagine a world where farmers can ask and learn everything— from crop tips to weather forecasts—using just their voice! Our app provides real-time, AI-driven insights through audio, images, and videos, making farming smarter and simpler.
+
+2.Farm-to-Consumer Marketplace:
+
+ Farmers can upload videos of their techniques, interact with peers, and directly connect with consumers, enabling seamless selling and bidding for crops. It's a modern marketplace with a personal touch!
+
+3.Knowledge & Community in One Place: 
+
+Offering everything from soil health advice to high-profit strategies, our platform is designed to not only teach but also connect farmers through engaging community videos and collaborative spaces.
+
+4.Creation of accounts for the farmer and consumer using AI based on the voice prompt by the user . AI should be able to understand the natural language of farmer or consumer , multiple languages of farmers  like mainly telugu from telangana, india and also other languages.  
+                                                                           
+5. Farmers can post their videos of farming in the platform and  consumers watch and decide which crop can from which one and likewise, it should have security and privacy at the same time it should provide enough details to communicate with each other and gain knowlegde from each other.
+          
+6.Easy, Accessible, and Personalized: 
+
+Powered by voice prompts, farmers can create accounts, access tailored recommendations, and manage their entire farming journey with ease—making this platform accessible to everyone, tech-savvy or not.                                                                  -> Set all the default images or videos or names to some imges/videos/names from web or google,etc,..                                                            -> provide the knowlege or information about different types of soils,conditions to grow,crops to grow in different regions, many unique ideas for the farmers to grow and get more profit.                                                                                ->  AI should have so much techincal knowledge about farming,organic farming ,techiques used, modern techiques, old techniques , previous historic knowledge about farming /agriculure .                                            -> .provide and AI that can take users or farmers voice prompt and can create user Id or login creditials according to users voice prompt for them.                                                             
+AI + Voice + Community = The Future of Farming!                                                                                                                                                                                                                                                                                                                                                                                                                                      
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             Note: Follow all my instructions and make my app better, Also use AI to Exceeding capabilities and add any extra special features for helping an uneducated farmer, consumer(educated / uneducated).  Try to give me best what you can do.
