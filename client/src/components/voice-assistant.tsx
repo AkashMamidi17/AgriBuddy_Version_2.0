@@ -12,6 +12,14 @@ export default function VoiceAssistant() {
   const { toast } = useToast();
   const { isConnected, error, sendMessage } = useWebSocket('/ws');
 
+  // Demo responses in Telugu
+  const teluguResponses = {
+    greet: "నమస్కారం! నేను మీకు ఎలా సహాయం చేయగలను?",
+    weather: "నేడు వాతావరణం చల్లగా ఉంటుంది, వర్షం పడే అవకాశం ఉంది.",
+    crops: "మీ పంటల గురించి చెప్పండి, నేను సలహా ఇస్తాను.",
+    default: "క్షమించండి, నాకు అర్థం కాలేదు. దయచేసి మళ్లీ చెప్పండి."
+  };
+
   useEffect(() => {
     if (typeof window !== "undefined" && "webkitSpeechRecognition" in window) {
       const SpeechRecognition = (window as any).webkitSpeechRecognition;
@@ -30,6 +38,16 @@ export default function VoiceAssistant() {
         setTranscript(transcript);
         if (isConnected) {
           sendMessage(JSON.stringify({ type: 'transcript', content: transcript }));
+          // Auto-respond based on keywords
+          if (transcript.includes("నమస్కారం") || transcript.includes("హలో")) {
+            speak(teluguResponses.greet);
+          } else if (transcript.includes("వాతావరణం")) {
+            speak(teluguResponses.weather);
+          } else if (transcript.includes("పంట") || transcript.includes("వ్యవసాయం")) {
+            speak(teluguResponses.crops);
+          } else {
+            speak(teluguResponses.default);
+          }
         }
       };
 
@@ -62,6 +80,7 @@ export default function VoiceAssistant() {
     } else {
       recognition.start();
       setIsListening(true);
+      speak(teluguResponses.greet);
     }
   };
 
@@ -71,7 +90,6 @@ export default function VoiceAssistant() {
     window.speechSynthesis.speak(utterance);
   };
 
-  // Display connection error if any
   useEffect(() => {
     if (error) {
       toast({
@@ -83,7 +101,7 @@ export default function VoiceAssistant() {
   }, [error, toast]);
 
   return (
-    <Card className="w-full md:w-auto">
+    <Card className="w-full md:w-auto bg-white/95 backdrop-blur-sm shadow-lg">
       <CardContent className="p-4">
         <div className="flex items-center gap-4">
           {isConnected ? (
@@ -94,7 +112,7 @@ export default function VoiceAssistant() {
           <Button
             onClick={toggleListening}
             variant={isListening ? "destructive" : "default"}
-            className="relative"
+            className="relative bg-gradient-to-r from-green-500 to-blue-500 text-white hover:from-green-600 hover:to-blue-600"
             disabled={!isConnected}
           >
             {isListening ? (
@@ -110,23 +128,15 @@ export default function VoiceAssistant() {
               </>
             )}
           </Button>
-
-          {transcript && (
-            <Button
-              variant="outline"
-              onClick={() => speak("Hello! How can I help you today?")}
-              disabled={!isConnected}
-            >
-              <Volume2 className="h-4 w-4 mr-2" />
-              Respond
-            </Button>
-          )}
         </div>
 
         {transcript && (
-          <p className="mt-4 text-sm text-gray-600">
-            You said: {transcript}
-          </p>
+          <div className="mt-4 space-y-2">
+            <p className="text-sm font-medium text-gray-700">You said:</p>
+            <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+              {transcript}
+            </p>
+          </div>
         )}
       </CardContent>
     </Card>

@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer } from "ws";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertProductSchema, insertPostSchema } from "@shared/schema";
+import { insertProductSchema, insertPostSchema, insertBidSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -19,8 +19,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/products", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     const data = insertProductSchema.parse(req.body);
-    const product = await storage.createProduct({ ...data, userId: req.user!.id });
+    const product = await storage.createProduct({ 
+      ...data, 
+      userId: req.user!.id,
+      status: 'active',
+      currentBid: data.price,
+      biddingEndTime: data.biddingEndTime || new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours from now
+    });
     res.json(product);
+  });
+
+  app.post("/api/products/:id/bid", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const productId = parseInt(req.params.id);
+    const product = await storage.getProduct(productId);
+
+    if (!product) {
+      return res.status(404).send("Product not found");
+    }
+
+    if (product.status !== 'active') {
+      return res.status(400).send("This product is no longer available for bidding");
+    }
+
+    if (new Date(product.biddingEndTime!) < new Date()) {
+      return res.status(400).send("Bidding has ended for this product");
+    }
+
+    const { amount } = insertBidSchema.parse(req.body);
+    if (amount <= (product.currentBid || product.price)) {
+      return res.status(400).send("Bid amount must be higher than current bid");
+    }
+
+    const bid = await storage.createBid({
+      productId,
+      userId: req.user!.id,
+      amount
+    });
+
+    await storage.updateProduct(productId, { currentBid: amount });
+
+    // Notify all connected clients about the new bid
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({
+          type: 'bid',
+          productId,
+          amount,
+          userId: req.user!.id
+        }));
+      }
+    });
+
+    res.json(bid);
   });
 
   // Posts API
@@ -38,12 +89,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // WebSocket handling for real-time updates
   wss.on('connection', (ws) => {
+    console.log('Client connected to WebSocket');
+
     ws.on('message', (message) => {
-      wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(message.toString());
-        }
-      });
+      const data = JSON.parse(message.toString());
+
+      // Handle voice assistant messages
+      if (data.type === 'transcript') {
+        // Echo back the transcript to all connected clients
+        wss.clients.forEach((client) => {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({
+              type: 'response',
+              content: `Received: ${data.content}`
+            }));
+          }
+        });
+      }
+    });
+
+    ws.on('close', () => {
+      console.log('Client disconnected from WebSocket');
     });
   });
 
