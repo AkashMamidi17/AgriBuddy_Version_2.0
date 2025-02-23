@@ -1,24 +1,27 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Mic, MicOff, Volume2, Wifi, WifiOff } from "lucide-react";
+import { Mic, MicOff, Wifi, WifiOff } from "lucide-react";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useToast } from "@/hooks/use-toast";
+
+const teluguResponses = {
+  greet: "నమస్కారం! నేను మీకు ఎలా సహాయం చేయగలను?",
+  weather: "నేడు వాతావరణం చల్లగా ఉంటుంది, వర్షం పడే అవకాశం ఉంది.",
+  crops: "మీ పంటల గురించి చెప్పండి, నేను సలహా ఇస్తాను.",
+  market: "ప్రస్తుతం మార్కెట్లో ధరలు స్థిరంగా ఉన్నాయి.",
+  help: "నేను మీకు వ్యవసాయం, వాతావరణం, మార్కెట్ ధరల గురించి సమాచారం ఇవ్వగలను.",
+  default: "క్షమించండి, నాకు అర్థం కాలేదు. దయచేసి మళ్లీ చెప్పండి.",
+  goodbye: "మళ్ళీ కలుద్దాం! మంచి రోజు కావాలని కోరుకుంటున్నాను."
+};
 
 export default function VoiceAssistant() {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [recognition, setRecognition] = useState<any>(null);
+  const [lastResponse, setLastResponse] = useState("");
   const { toast } = useToast();
   const { isConnected, error, sendMessage } = useWebSocket('/ws');
-
-  // Demo responses in Telugu
-  const teluguResponses = {
-    greet: "నమస్కారం! నేను మీకు ఎలా సహాయం చేయగలను?",
-    weather: "నేడు వాతావరణం చల్లగా ఉంటుంది, వర్షం పడే అవకాశం ఉంది.",
-    crops: "మీ పంటల గురించి చెప్పండి, నేను సలహా ఇస్తాను.",
-    default: "క్షమించండి, నాకు అర్థం కాలేదు. దయచేసి మళ్లీ చెప్పండి."
-  };
 
   useEffect(() => {
     if (typeof window !== "undefined" && "webkitSpeechRecognition" in window) {
@@ -36,18 +39,28 @@ export default function VoiceAssistant() {
           .join("");
 
         setTranscript(transcript);
+
         if (isConnected) {
           sendMessage(JSON.stringify({ type: 'transcript', content: transcript }));
-          // Auto-respond based on keywords
+          let response = teluguResponses.default;
+
+          // Enhanced keyword matching for better Telugu interaction
           if (transcript.includes("నమస్కారం") || transcript.includes("హలో")) {
-            speak(teluguResponses.greet);
+            response = teluguResponses.greet;
           } else if (transcript.includes("వాతావరణం")) {
-            speak(teluguResponses.weather);
+            response = teluguResponses.weather;
           } else if (transcript.includes("పంట") || transcript.includes("వ్యవసాయం")) {
-            speak(teluguResponses.crops);
-          } else {
-            speak(teluguResponses.default);
+            response = teluguResponses.crops;
+          } else if (transcript.includes("మార్కెట్") || transcript.includes("ధర")) {
+            response = teluguResponses.market;
+          } else if (transcript.includes("సహాయం") || transcript.includes("ఏమి చేయగలవు")) {
+            response = teluguResponses.help;
+          } else if (transcript.includes("వీడ్కోలు") || transcript.includes("సెలవు")) {
+            response = teluguResponses.goodbye;
           }
+
+          setLastResponse(response);
+          speak(response);
         }
       };
 
@@ -77,6 +90,7 @@ export default function VoiceAssistant() {
     if (isListening) {
       recognition.stop();
       setIsListening(false);
+      speak(teluguResponses.goodbye);
     } else {
       recognition.start();
       setIsListening(true);
@@ -87,6 +101,7 @@ export default function VoiceAssistant() {
   const speak = (text: string) => {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = "te-IN"; // Telugu language
+    utterance.rate = 0.9; // Slightly slower for better clarity
     window.speechSynthesis.speak(utterance);
   };
 
@@ -130,12 +145,24 @@ export default function VoiceAssistant() {
           </Button>
         </div>
 
-        {transcript && (
+        {(transcript || lastResponse) && (
           <div className="mt-4 space-y-2">
-            <p className="text-sm font-medium text-gray-700">You said:</p>
-            <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-              {transcript}
-            </p>
+            {transcript && (
+              <>
+                <p className="text-sm font-medium text-gray-700">You said:</p>
+                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                  {transcript}
+                </p>
+              </>
+            )}
+            {lastResponse && (
+              <>
+                <p className="text-sm font-medium text-gray-700">Assistant responded:</p>
+                <p className="text-sm text-green-600 bg-green-50 p-3 rounded-lg">
+                  {lastResponse}
+                </p>
+              </>
+            )}
           </div>
         )}
       </CardContent>
