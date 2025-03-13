@@ -40,7 +40,7 @@ export default function AuthPage() {
       <div className="max-w-6xl w-full grid md:grid-cols-2 gap-8">
         <div className="space-y-6">
           <h1 className="text-4xl font-bold text-green-800">
-            Welcome to FarmConnect
+            Welcome to AgriBuddy
           </h1>
           <p className="text-lg text-gray-600">
             Join our community of farmers and consumers. Share knowledge, trade

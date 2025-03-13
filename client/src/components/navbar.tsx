@@ -22,7 +22,7 @@ export default function Navbar() {
               <NavigationMenuItem>
                 <Link href="/">
                   <NavigationMenuLink className="text-xl font-bold">
-                    FarmConnect
+                    AgriBuddy
                   </NavigationMenuLink>
                 </Link>
               </NavigationMenuItem>
