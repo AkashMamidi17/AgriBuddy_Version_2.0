@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { WebSocketServer } from "ws";
+import { WebSocketServer, WebSocket } from "ws";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { insertProductSchema, insertPostSchema, insertBidSchema } from "@shared/schema";
@@ -84,7 +84,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/posts", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     const data = insertPostSchema.parse(req.body);
-    const post = await storage.createPost({ ...data, userId: req.user!.id });
+    // Ensure videoUrl is not undefined by defaulting to null
+    const videoUrl = data.videoUrl === undefined ? null : data.videoUrl;
+    const post = await storage.createPost({ ...data, videoUrl, userId: req.user!.id });
     res.json(post);
   });
 
@@ -94,21 +96,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     ws.on('message', async (message) => {
       try {
+        console.log('Received WebSocket message');
         const data = JSON.parse(message.toString());
+        console.log('Message parsed:', data.type);
 
         if (data.type === 'voice_input') {
-          const result = await processVoiceInput(
-            Buffer.from(data.audio, 'base64'),
-            data.language
-          );
+          console.log('Processing voice input, language:', data.language);
+          
+          try {
+            // Send acknowledgment that processing has started
+            ws.send(JSON.stringify({
+              type: 'processing_started',
+              message: 'Your voice is being processed...'
+            }));
+            
+            const result = await processVoiceInput(
+              Buffer.from(data.audio, 'base64'),
+              data.language
+            );
 
-          ws.send(JSON.stringify({
-            type: 'ai_response',
-            content: result
-          }));
+            console.log('Voice processing completed, sending response');
+            ws.send(JSON.stringify({
+              type: 'ai_response',
+              content: result
+            }));
+          } catch (voiceError: any) {
+            console.error('Voice processing error:', voiceError);
+            ws.send(JSON.stringify({
+              type: 'error',
+              message: `Voice processing failed: ${voiceError?.message || 'Unknown error'}`
+            }));
+          }
         }
-        //This section is from the original code and needs to be kept for backward compatibility
-        if (data.type === 'transcript') {
+        
+        // This section is from the original code and needs to be kept for backward compatibility
+        else if (data.type === 'transcript') {
           // Echo back the transcript to all connected clients
           wss.clients.forEach((client) => {
             if (client.readyState === WebSocket.OPEN) {
@@ -121,11 +143,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       } catch (error) {
         console.error('WebSocket message handling error:', error);
-        ws.send(JSON.stringify({
-          type: 'error',
-          message: error.message
-        }));
+        try {
+          ws.send(JSON.stringify({
+            type: 'error',
+            message: error instanceof Error ? error.message : 'Unknown error occurred'
+          }));
+        } catch (sendError) {
+          console.error('Failed to send error message to client:', sendError);
+        }
       }
+    });
+
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
     });
 
     ws.on('close', () => {

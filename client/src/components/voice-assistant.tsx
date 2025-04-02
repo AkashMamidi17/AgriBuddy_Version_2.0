@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Mic, MicOff, Wifi, WifiOff, Volume2, Loader2 } from "lucide-react";
+import { Mic, MicOff, Wifi, WifiOff, Volume2, Loader2, AlertCircle } from "lucide-react";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Message {
   type: 'sent' | 'received';
@@ -25,11 +26,22 @@ export default function VoiceAssistant() {
   const [language, setLanguage] = useState("te");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
   const { toast } = useToast();
   const { isConnected, error, wsRef } = useWebSocket('/ws');
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement | null>(null);
+
+  // Auto-scroll to bottom when messages update
+  useEffect(() => {
+    if (scrollAreaRef.current) {
+      const scrollElement = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollElement) {
+        scrollElement.scrollTop = scrollElement.scrollHeight;
+      }
+    }
+  }, [messages]);
 
   useEffect(() => {
     if (error) {
@@ -43,6 +55,7 @@ export default function VoiceAssistant() {
 
   const startRecording = async () => {
     try {
+      setStatusMessage(null);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorder.current = new MediaRecorder(stream);
       audioChunks.current = [];
@@ -65,12 +78,19 @@ export default function VoiceAssistant() {
 
               if (wsRef.current?.readyState === WebSocket.OPEN) {
                 setIsProcessing(true);
-                wsRef.current.send(JSON.stringify({
-                  type: 'voice_input',
-                  audio: base64Audio,
-                  language
-                }));
-                console.log('Sent audio data to server');
+                setStatusMessage("Sending your voice to the assistant...");
+                
+                try {
+                  wsRef.current.send(JSON.stringify({
+                    type: 'voice_input',
+                    audio: base64Audio,
+                    language
+                  }));
+                  console.log('Sent audio data to server');
+                } catch (sendError) {
+                  console.error('Failed to send audio data:', sendError);
+                  throw new Error('Failed to send audio data to server');
+                }
               } else {
                 throw new Error('WebSocket is not connected');
               }
@@ -81,9 +101,10 @@ export default function VoiceAssistant() {
         } catch (err) {
           console.error('Failed to process audio:', err);
           setIsProcessing(false);
+          setStatusMessage(null);
           toast({
             title: "Processing Error",
-            description: `Failed to process audio: ${err.message}`,
+            description: `Failed to process audio: ${err instanceof Error ? err.message : 'Unknown error'}`,
             variant: "destructive",
           });
         }
@@ -121,6 +142,13 @@ export default function VoiceAssistant() {
         const data = JSON.parse(event.data);
         console.log('Received WebSocket message:', data);
 
+        // Handle processing started messages
+        if (data.type === 'processing_started') {
+          setStatusMessage(data.message || "Processing your request...");
+          return;
+        }
+
+        // Handle AI responses
         if (data.type === 'ai_response') {
           const { text, response, audioResponse, imageUrl } = data.content;
           console.log('Processing AI response:', { text, response, hasAudio: !!audioResponse, hasImage: !!imageUrl });
@@ -132,10 +160,18 @@ export default function VoiceAssistant() {
           if (audioResponse) {
             try {
               const audio = new Audio(`data:audio/mp3;base64,${audioResponse}`);
-              await audio.play();
-              console.log('Playing audio response');
-            } catch (error) {
-              console.error('Failed to play audio:', error);
+              // Attempt to play the audio
+              const playPromise = audio.play();
+              if (playPromise !== undefined) {
+                playPromise
+                  .then(() => console.log('Playing audio response successfully'))
+                  .catch(playError => {
+                    console.error('Failed to play audio automatically:', playError);
+                    // We'll still include the audio button for manual playback
+                  });
+              }
+            } catch (audioError) {
+              console.error('Failed to create audio:', audioError);
             }
           }
 
@@ -146,8 +182,13 @@ export default function VoiceAssistant() {
             audioUrl: audioResponse ? `data:audio/mp3;base64,${audioResponse}` : undefined,
             imageUrl
           }]);
-        } else if (data.type === 'error') {
+
+          setStatusMessage(null);
+        } 
+        // Handle error messages
+        else if (data.type === 'error') {
           console.error('Server error:', data.message);
+          setStatusMessage(null);
           toast({
             title: "Processing Error",
             description: data.message,
@@ -159,6 +200,7 @@ export default function VoiceAssistant() {
       } catch (error) {
         console.error('Failed to handle message:', error);
         setIsProcessing(false);
+        setStatusMessage(null);
         toast({
           title: "Error",
           description: "Failed to process server response",
@@ -238,8 +280,26 @@ export default function VoiceAssistant() {
           </Button>
         </div>
 
+        {statusMessage && (
+          <Alert className="mb-4 bg-blue-50 border-blue-200">
+            <Loader2 className="h-4 w-4 animate-spin text-blue-500 mr-2" />
+            <AlertDescription>{statusMessage}</AlertDescription>
+          </Alert>
+        )}
+
         <ScrollArea className="h-[300px] pr-4" ref={scrollAreaRef}>
           <div className="space-y-4">
+            {messages.length === 0 && (
+              <div className="flex items-center justify-center h-full p-6 text-center text-gray-500">
+                <div>
+                  <Mic className="h-12 w-12 mx-auto mb-2 text-gray-400" />
+                  <p className="text-sm">
+                    Click the microphone button and start speaking to your farming assistant in Telugu, English, or Hindi.
+                  </p>
+                </div>
+              </div>
+            )}
+            
             {messages.map((message, index) => (
               <div
                 key={index}
@@ -248,13 +308,13 @@ export default function VoiceAssistant() {
                 }`}
               >
                 <div
-                  className={`rounded-lg p-3 max-w-[80%] ${
+                  className={`rounded-lg p-3 max-w-[85%] ${
                     message.type === 'sent'
                       ? 'bg-blue-500 text-white'
                       : 'bg-gray-100 text-gray-800'
                   }`}
                 >
-                  <p>{message.text}</p>
+                  <p className="whitespace-pre-line">{message.text}</p>
                   {message.audioUrl && (
                     <Button
                       variant="ghost"
@@ -267,11 +327,17 @@ export default function VoiceAssistant() {
                     </Button>
                   )}
                   {message.imageUrl && (
-                    <img
-                      src={message.imageUrl}
-                      alt="AI Generated Visual"
-                      className="mt-2 rounded-lg max-w-full"
-                    />
+                    <div className="mt-3">
+                      <img
+                        src={message.imageUrl}
+                        alt="AI Generated Visual"
+                        className="rounded-lg max-w-full"
+                        onError={(e) => {
+                          console.error('Image failed to load');
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    </div>
                   )}
                 </div>
               </div>
