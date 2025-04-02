@@ -1,5 +1,5 @@
 import { IStorage } from "./types";
-import { User, Product, Post, Bid } from "@shared/schema";
+import { User, Product, Post, Bid } from "./shared/schema";
 import createMemoryStore from "memorystore";
 import session from "express-session";
 
