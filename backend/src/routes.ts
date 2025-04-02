@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertProductSchema, insertPostSchema, insertBidSchema } from "@shared/schema";
+import { insertProductSchema, insertPostSchema, insertBidSchema } from "../shared/schema";
 import { processVoiceInput } from "./ai-assistant";
 
 export async function registerRoutes(app: Express): Promise<Server> {

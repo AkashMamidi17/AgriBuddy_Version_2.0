@@ -139,7 +139,7 @@ async function simulateAIResponse(text: string, sourceLanguage: string, session?
             password: tempPassword
           };
           
-          const newUser = await storage.createUser(profileData);
+          const newUser = await storage.createUser(profileData as InsertUser);
           console.log("New user created:", newUser);
           
           response = `Great! I've collected all the information needed for your profile:
@@ -326,160 +326,197 @@ export async function processVoiceInput(audioBuffer: Buffer, sourceLanguage: str
           const isComplete = session.data.name && session.data.userType && 
                             session.data.location && session.data.username;
                             
-          // Prepare the next prompt based on current stage and collected data
-          let nextPrompt;
           if (isComplete) {
-            const profileData = {
-              ...session.data,
-              // Generate a temporary password that user can change later
-              password: `temp_${Math.random().toString(36).substring(2, 10)}`
-            };
-            
-            nextPrompt = `Great! I've collected all the information needed for your profile:
-              - Name: ${session.data.name}
-              - Type: ${session.data.userType} 
-              - Location: ${session.data.location}
-              - Username: ${session.data.username}
-              
-              [PROFILE_COMPLETE] ${JSON.stringify(profileData)}
-              
-              Your profile has been created successfully. You can now log in with your username.
-              A temporary password has been generated for you, which you should change after logging in.`;
-              
-            session.stage = 'complete';
-          } else if (session.stage === 'name' && !session.data.name) {
-            nextPrompt = "To create your profile, I need some information. What is your full name?";
-          } else if (session.stage === 'userType' && !session.data.userType) {
-            nextPrompt = `Thanks ${session.data.name}. Are you a farmer or a consumer?`;
-          } else if (session.stage === 'location' && !session.data.location) {
-            nextPrompt = `Great! Now, which village or town are you from?`;
-          } else if (session.stage === 'username' && !session.data.username) {
-            nextPrompt = `Almost done! What username would you like to use for logging in?`;
-          } else {
-            // Handle partial information case
-            const missingFields = [];
-            if (!session.data.name) missingFields.push("name");
-            if (!session.data.userType) missingFields.push("whether you're a farmer or consumer");
-            if (!session.data.location) missingFields.push("location");
-            if (!session.data.username) missingFields.push("username");
-            
-            nextPrompt = `I've recorded: ${JSON.stringify(session.data)}. I still need your ${missingFields.join(", ")}. Please provide this information.`;
-          }
-          
-          // 2. Get AI response using GPT-4o for profile creation
-          const completion = await openai.chat.completions.create({
-            model: OPENAI_MODEL,
-            messages: [
-              { role: "system", content: systemMessage },
-              ...session.history,
-              { role: "user", content: nextPrompt }
-            ],
-            max_tokens: 500,
-          });
-          
-          responseContent = completion.choices[0].message.content || "";
-          
-          // Check if profile is complete and extract the JSON data
-          if (responseContent.includes("[PROFILE_COMPLETE]")) {
+            // Create the user in the database
             try {
-              const jsonMatch = responseContent.match(/\[PROFILE_COMPLETE\]\s*({[^}]+})/);
-              if (jsonMatch && jsonMatch[1]) {
-                const profileData = JSON.parse(jsonMatch[1]);
-                console.log("Profile creation data:", profileData);
+              // Generate a temporary password
+              const tempPassword = `temp_${Math.random().toString(36).substring(2, 10)}`;
+              
+              const userData = {
+                username: session.data.username!,
+                password: tempPassword,
+                name: session.data.name!,
+                userType: session.data.userType!,
+                location: session.data.location!
+              };
+              
+              const newUser = await storage.createUser(userData);
+              console.log("Created new user:", newUser);
+              
+              responseContent = `Great! I've collected all the information needed for your profile:
+                - Name: ${session.data.name}
+                - Type: ${session.data.userType}
+                - Location: ${session.data.location}
+                - Username: ${session.data.username}
                 
-                // Create the user in the database
-                try {
-                  const newUser = await storage.createUser(profileData);
-                  console.log("New user created:", newUser);
-                  
-                  // Clean up the JSON data from the response
-                  responseContent = responseContent.replace(/\[PROFILE_COMPLETE\]\s*({[^}]+})/, "[PROFILE_COMPLETE]");
-                } catch (dbError) {
-                  console.error("Failed to create user:", dbError);
-                  responseContent += "\n\nThere was an error creating your profile. Please try again later.";
-                }
-              }
-            } catch (jsonError) {
-              console.error("Failed to parse profile data:", jsonError);
+                Your profile has been created successfully. You can now log in with your username.
+                A temporary password has been generated for you, which you should change after logging in.`;
+                
+            } catch (error) {
+              console.error("Failed to create user:", error);
+              responseContent = "There was an error creating your profile. Please try again later.";
+            }
+          } else {
+            // Determine what information we still need
+            let promptForNextField = "";
+            
+            if (!session.data.name) {
+              promptForNextField = "What is your full name?";
+            } else if (!session.data.userType) {
+              promptForNextField = `Thanks ${session.data.name}! Are you a farmer or a consumer?`;
+            } else if (!session.data.location) {
+              promptForNextField = "Great! Which village or town are you from?";
+            } else if (!session.data.username) {
+              promptForNextField = "Almost done! What username would you like to use for logging in?";
+            }
+            
+            // Use the OpenAI API to generate a more natural response
+            try {
+              // Prepare messages for the chat completion
+              const messages = [
+                { role: "system", content: systemMessage },
+                ...session.history,
+              ];
+              
+              // Add a final system message with instructions for the current stage
+              messages.push({
+                role: "system",
+                content: `Current data collected: ${JSON.stringify(session.data)}. 
+                  Current stage: ${session.stage}.
+                  Next field to collect: ${session.stage}.
+                  Default prompt if needed: "${promptForNextField}"`
+              });
+              
+              // Call the OpenAI API
+              const response = await openai.chat.completions.create({
+                model: OPENAI_MODEL,
+                messages,
+                max_tokens: 300,
+              });
+              
+              responseContent = response.choices[0].message.content;
+              
+              // Add this response to the conversation history
+              session.history.push({ role: "assistant", content: responseContent });
+              
+            } catch (apiError) {
+              console.error("OpenAI API error:", apiError);
+              // Fallback to the simple prompt if the API call fails
+              responseContent = promptForNextField;
             }
           }
-          
-          // Add AI response to history
-          session.history.push({ role: "assistant", content: responseContent });
         } else {
-          // Normal conversation mode
-          systemMessage = `You are AgriBuddy, a multilingual farming assistant specializing in agricultural advice. 
-          Respond in the same language as the user's query (${sourceLanguage}). Focus on providing practical, region-specific farming advice.
-          Format responses to be easily readable and actionable.
-          If the user asks about crop diseases, pest management, or needs visual guidance, include "[GENERATE_IMAGE]" in your response.
-          If the user wants to create a profile or register, suggest starting a new conversation with "create profile".
-          Make your responses natural and conversational.`;
-          
-          // 2. Get AI response using GPT-4o
-          const completion = await openai.chat.completions.create({
-            model: OPENAI_MODEL,
-            messages: [
+          // This is a regular farming conversation
+          systemMessage = `You are AgriBuddy, a helpful AI assistant for farmers in India. 
+            Your goal is to provide clear, practical advice on farming techniques, crop management, 
+            weather information, market prices, and agricultural equipment.
+            
+            For each response, follow these rules:
+            1. Focus on providing accurate information relevant to Indian agriculture.
+            2. Use simple language appropriate for rural users.
+            3. Respond in the same language as the user's message (${sourceLanguage}).
+            4. If you need to show an image, include [GENERATE_IMAGE] in your response.
+            5. Keep responses concise and actionable.`;
+            
+          try {
+            // Prepare messages for the chat completion
+            const messages = [
               { role: "system", content: systemMessage },
               { role: "user", content: transcription.text }
-            ],
-            max_tokens: 500,
-          });
-          
-          responseContent = completion.choices[0].message.content || "";
+            ];
+            
+            // Call the OpenAI API
+            const response = await openai.chat.completions.create({
+              model: OPENAI_MODEL,
+              messages,
+              max_tokens: 400,
+            });
+            
+            responseContent = response.choices[0].message.content;
+            
+            // Check if we need to generate an image
+            const shouldGenerateImage = responseContent.includes("[GENERATE_IMAGE]");
+            let imageUrl = null;
+            
+            if (shouldGenerateImage) {
+              // Clean up the response by removing the [GENERATE_IMAGE] tag
+              responseContent = responseContent.replace("[GENERATE_IMAGE]", "").trim();
+              
+              try {
+                // Generate an image using DALL-E
+                const imageResponse = await openai.images.generate({
+                  model: "dall-e-3",
+                  prompt: `A photorealistic educational image related to agriculture showing: ${responseContent.slice(0, 200)}. Make it informative and clear for farmers in India. Do not include any text in the image.`,
+                  n: 1,
+                  size: "1024x1024",
+                });
+                
+                imageUrl = imageResponse.data[0].url;
+                console.log("Generated image URL:", imageUrl);
+              } catch (imageError) {
+                console.error("Image generation error:", imageError);
+                // If image generation fails, provide a generic farming image
+                imageUrl = "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?ixlib=rb-4.0.3&auto=format&fit=crop&w=1024&q=80";
+              }
+            }
+            
+            // Optional: Generate audio response using text-to-speech (not implemented)
+            const fakeAudioData = Buffer.from("Simulated audio data").toString('base64');
+            
+            responseData = {
+              response: responseContent,
+              audioResponse: fakeAudioData,
+              imageUrl,
+              profileCreation: false
+            };
+            
+          } catch (apiError) {
+            console.error("OpenAI API error:", apiError);
+            // Fall back to simulated response
+            responseData = await simulateAIResponse(transcription.text, sourceLanguage);
+          }
         }
-
-        // 3. Generate image if needed (for visual explanations)
-        let imageUrl = null;
         
-        if (responseContent.includes("[GENERATE_IMAGE]")) {
-          const cleanPrompt = responseContent.replace("[GENERATE_IMAGE]", "").trim();
-          const image = await openai.images.generate({
-            model: "dall-e-3",
-            prompt: `Agricultural visualization for farmers: ${cleanPrompt}. Create a clear, instructional image that would be helpful for farmers.`,
-            n: 1,
-            size: "1024x1024",
-          });
-          imageUrl = image.data[0].url;
-          console.log("Image generated:", imageUrl);
+        if (!responseData) {
+          responseData = {
+            response: responseContent,
+            // This would be replaced with actual TTS if implemented
+            audioResponse: Buffer.from("Simulated audio data").toString('base64'),
+            profileCreation: session?.stage !== 'complete' && session?.stage !== 'initial'
+          };
         }
-
-        // 4. Convert response to speech
-        const cleanResponse = responseContent.replace("[GENERATE_IMAGE]", "")
-                                            .replace(/\[PROFILE_COMPLETE\]/g, "")
-                                            .trim();
-                                            
-        const speech = await openai.audio.speech.create({
-          model: "tts-1",
-          voice: sourceLanguage === "te" ? "nova" : "alloy", // Use appropriate voice for language
-          input: cleanResponse,
-        });
-
-        console.log("Speech generation successful");
-
-        // Get audio as base64
-        const audioResponse = Buffer.from(await speech.arrayBuffer()).toString('base64');
-        
-        responseData = {
-          response: cleanResponse,
-          audioResponse,
-          imageUrl,
-          profileCreation: session?.stage !== 'complete' && session?.stage !== 'initial'
-        };
       }
 
-      return {
+      // Clean up the temporary file
+      try {
+        fs.unlinkSync(tempFilePath);
+      } catch (cleanupError) {
+        console.error("Failed to clean up temporary file:", cleanupError);
+      }
+
+      return { 
         text: transcription.text,
         ...responseData
       };
-    } finally {
-      // Clean up the temporary file
-      if (fs.existsSync(tempFilePath)) {
-        fs.unlinkSync(tempFilePath);
-        console.log("Temporary audio file deleted");
+      
+    } catch (error) {
+      console.error("Voice processing error:", error);
+      // Clean up the temporary file if it exists
+      try {
+        if (fs.existsSync(tempFilePath)) {
+          fs.unlinkSync(tempFilePath);
+        }
+      } catch (cleanupError) {
+        console.error("Failed to clean up temporary file:", cleanupError);
       }
+      throw error;
     }
   } catch (error) {
-    console.error("AI processing error:", error);
-    throw new Error(`Failed to process voice input: ${error instanceof Error ? error.message : String(error)}`);
+    console.error("Failed to process voice input:", error);
+    return { 
+      text: "I couldn't understand that. Please try again.",
+      response: "Sorry, I encountered an error processing your request. Please try again.",
+      audioResponse: null
+    };
   }
 }

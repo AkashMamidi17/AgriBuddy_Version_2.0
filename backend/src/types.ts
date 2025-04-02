@@ -1,4 +1,4 @@
-import { InsertUser, User, Product, Post, Bid } from "@shared/schema";
+import { InsertUser, User, Product, Post, Bid } from "../shared/schema";
 import session from "express-session";
 
 export interface IStorage {

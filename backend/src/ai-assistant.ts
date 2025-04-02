@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { storage } from "./storage";
-import { InsertUser } from "@shared/schema";
+import { InsertUser } from "../shared/schema";
 
 // Use OpenAI API if key exists, otherwise use local simulation
 const USE_LOCAL_SIMULATION = !process.env.OPENAI_API_KEY;
