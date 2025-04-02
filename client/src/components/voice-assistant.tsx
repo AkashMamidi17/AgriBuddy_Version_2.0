@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Mic, MicOff, Wifi, WifiOff, Volume2, Loader2, AlertCircle } from "lucide-react";
@@ -25,12 +25,45 @@ export default function VoiceAssistant() {
   const [isListening, setIsListening] = useState(false);
   const [language, setLanguage] = useState("te");
   const [messages, setMessages] = useState<Message[]>([]);
+  
+  // Function to get welcome message based on language (memoized to avoid re-creating on every render)
+  const getWelcomeMessage = useCallback((lang: string) => {
+    switch (lang) {
+      case 'te':
+        return 'నమస్కారం! నేను మీ వ్యవసాయ సహాయకుడిని (AgriBuddy). వ్యవసాయానికి సంబంధించిన సలహాలు, వాతావరణ సమాచారం, లేదా ప్రొఫైల్ సృష్టి కోసం నాతో మాట్లాడండి. "ప్రొఫైల్ సృష్టించు" అని చెప్పి ప్రారంభించండి.';
+      case 'hi':
+        return 'नमस्ते! मैं आपका कृषि सहायक (AgriBuddy) हूं। खेती से जुड़ी सलाह, मौसम की जानकारी, या प्रोफाइल बनाने के लिए मुझसे बात करें। बस "प्रोफाइल बनाएं" कहकर शुरू करें।';
+      default:
+        return 'Hello! I am your farming assistant (AgriBuddy). Talk to me for farming advice, weather information, or to create a profile. Just say "create profile" to get started.';
+    }
+  }, []);
+  
+  // Initialize welcome message
+  useEffect(() => {
+    setMessages([{
+      type: 'received',
+      text: getWelcomeMessage(language)
+    }]);
+  }, [getWelcomeMessage, language]);
+  
+  // Update welcome message when language changes
+  useEffect(() => {
+    // Only update the welcome message if it's the only message (first message)
+    if (messages.length === 1 && messages[0].type === 'received' && !messages[0].audioUrl) {
+      setMessages([{
+        type: 'received',
+        text: getWelcomeMessage(language)
+      }]);
+    }
+  }, [language, messages, getWelcomeMessage]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isProfileCreation, setIsProfileCreation] = useState(false);
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
   const { toast } = useToast();
-  const { isConnected, error, wsRef } = useWebSocket('/ws');
+  const { isConnected, error, wsRef, sendJsonMessage, sendBinaryMessage, reconnecting } = useWebSocket('');
   const scrollAreaRef = useRef<HTMLDivElement | null>(null);
 
   // Auto-scroll to bottom when messages update
@@ -69,35 +102,52 @@ export default function VoiceAssistant() {
       mediaRecorder.current.onstop = async () => {
         try {
           const audioBlob = new Blob(audioChunks.current, { type: 'audio/wav' });
-          const reader = new FileReader();
+          
+          // Method 1: Send as JSON with base64 audio
+          if (audioBlob.size < 100000) { // Only for small audio clips (<100KB)
+            const reader = new FileReader();
+            
+            reader.onload = async () => {
+              if (typeof reader.result === 'string') {
+                const base64Audio = reader.result.split(',')[1];
+                console.log('Audio recorded and converted to base64');
 
-          reader.onload = async () => {
-            if (typeof reader.result === 'string') {
-              const base64Audio = reader.result.split(',')[1];
-              console.log('Audio recorded and converted to base64');
-
-              if (wsRef.current?.readyState === WebSocket.OPEN) {
                 setIsProcessing(true);
                 setStatusMessage("Sending your voice to the assistant...");
                 
-                try {
-                  wsRef.current.send(JSON.stringify({
-                    type: 'voice_input',
-                    audio: base64Audio,
-                    language
-                  }));
-                  console.log('Sent audio data to server');
-                } catch (sendError) {
-                  console.error('Failed to send audio data:', sendError);
-                  throw new Error('Failed to send audio data to server');
+                const success = sendJsonMessage('voice_input', {
+                  audio: base64Audio,
+                  language,
+                  sessionId: sessionId
+                });
+                
+                if (success) {
+                  console.log('Sent audio data to server as JSON');
+                } else {
+                  throw new Error('WebSocket is not connected');
                 }
-              } else {
-                throw new Error('WebSocket is not connected');
               }
+            };
+            
+            reader.readAsDataURL(audioBlob);
+          } 
+          // Method 2: Send as binary (more efficient for larger audio)
+          else {
+            setIsProcessing(true);
+            setStatusMessage("Sending your voice to the assistant...");
+            
+            // Convert blob to ArrayBuffer
+            const arrayBuffer = await audioBlob.arrayBuffer();
+            
+            // Send binary data with session ID
+            const success = sendBinaryMessage(arrayBuffer, sessionId || undefined);
+            
+            if (success) {
+              console.log('Sent audio data to server as binary');
+            } else {
+              throw new Error('WebSocket is not connected');
             }
-          };
-
-          reader.readAsDataURL(audioBlob);
+          }
         } catch (err) {
           console.error('Failed to process audio:', err);
           setIsProcessing(false);
@@ -150,8 +200,25 @@ export default function VoiceAssistant() {
 
         // Handle AI responses
         if (data.type === 'ai_response') {
-          const { text, response, audioResponse, imageUrl } = data.content;
-          console.log('Processing AI response:', { text, response, hasAudio: !!audioResponse, hasImage: !!imageUrl });
+          const { text, response, audioResponse, imageUrl, profileCreation } = data.content;
+          console.log('Processing AI response:', { 
+            text, 
+            response, 
+            hasAudio: !!audioResponse, 
+            hasImage: !!imageUrl,
+            profileCreation
+          });
+
+          // Save session ID for continuity
+          if (data.sessionId && !sessionId) {
+            setSessionId(data.sessionId);
+            console.log('Session ID set:', data.sessionId);
+          }
+
+          // Set profile creation mode if applicable
+          if (profileCreation) {
+            setIsProfileCreation(true);
+          }
 
           // Add user's message
           setMessages(prev => [...prev, { type: 'sent', text }]);
@@ -182,6 +249,16 @@ export default function VoiceAssistant() {
             audioUrl: audioResponse ? `data:audio/mp3;base64,${audioResponse}` : undefined,
             imageUrl
           }]);
+
+          // If this message completes profile creation, reset the profile creation flag
+          if (isProfileCreation && response.includes("profile has been created successfully")) {
+            setIsProfileCreation(false);
+            toast({
+              title: "Profile Created",
+              description: "Your profile has been created successfully. You can now log in.",
+              variant: "default",
+            });
+          }
 
           setStatusMessage(null);
         } 
@@ -215,7 +292,7 @@ export default function VoiceAssistant() {
         wsRef.current.removeEventListener('message', handleMessage);
       }
     };
-  }, [wsRef, toast]);
+  }, [wsRef, toast, sessionId, isProfileCreation]);
 
   const playAudio = async (audioUrl: string) => {
     try {
@@ -284,6 +361,13 @@ export default function VoiceAssistant() {
           <Alert className="mb-4 bg-blue-50 border-blue-200">
             <Loader2 className="h-4 w-4 animate-spin text-blue-500 mr-2" />
             <AlertDescription>{statusMessage}</AlertDescription>
+          </Alert>
+        )}
+        
+        {isProfileCreation && (
+          <Alert className="mb-4 bg-green-50 border-green-200">
+            <AlertCircle className="h-4 w-4 text-green-500 mr-2" />
+            <AlertDescription>Profile Creation Mode Active - Please answer the assistant's questions to create your profile</AlertDescription>
           </Alert>
         )}
 

@@ -96,29 +96,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     ws.on('message', async (message) => {
       try {
-        console.log('Received WebSocket message');
-        const data = JSON.parse(message.toString());
-        console.log('Message parsed:', data.type);
-
-        if (data.type === 'voice_input') {
-          console.log('Processing voice input, language:', data.language);
+        // Check if the message is a binary buffer
+        if (message instanceof Buffer) {
+          console.log('Received binary WebSocket message, length:', message.length);
           
+          let sessionId = 'default';
+          let audioBuffer = message;
+          let language = 'te'; // Default language
+          
+          // Check if the binary message contains a session ID prefix
+          // Format: <sessionId>:<audioData>
+          const messageString = message.toString();
+          const sessionIdMatch = messageString.match(/^(session_[^:]+):/);
+          
+          if (sessionIdMatch) {
+            sessionId = sessionIdMatch[1];
+            // Calculate the position after the session ID and colon
+            const startPos = sessionIdMatch[0].length;
+            // Extract the actual audio data (create a new buffer without the prefix)
+            audioBuffer = message.subarray(startPos);
+            console.log(`Extracted session ID: ${sessionId} from binary message`);
+          }
+          
+          // Send acknowledgment that processing has started
+          ws.send(JSON.stringify({
+            type: 'processing_started',
+            message: 'Your voice recording is being processed...'
+          }));
+          
+          // Process the voice input
           try {
-            // Send acknowledgment that processing has started
-            ws.send(JSON.stringify({
-              type: 'processing_started',
-              message: 'Your voice is being processed...'
-            }));
+            const result = await processVoiceInput(audioBuffer, language, sessionId);
             
-            const result = await processVoiceInput(
-              Buffer.from(data.audio, 'base64'),
-              data.language
-            );
-
             console.log('Voice processing completed, sending response');
             ws.send(JSON.stringify({
               type: 'ai_response',
-              content: result
+              content: result,
+              sessionId: sessionId
             }));
           } catch (voiceError: any) {
             console.error('Voice processing error:', voiceError);
@@ -128,18 +142,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }));
           }
         }
-        
-        // This section is from the original code and needs to be kept for backward compatibility
-        else if (data.type === 'transcript') {
-          // Echo back the transcript to all connected clients
-          wss.clients.forEach((client) => {
-            if (client.readyState === WebSocket.OPEN) {
-              client.send(JSON.stringify({
-                type: 'response',
-                content: `Received: ${data.content}`
+        // Handle JSON messages
+        else {
+          console.log('Received text WebSocket message');
+          const data = JSON.parse(message.toString());
+          console.log('Message parsed:', data.type);
+
+          if (data.type === 'voice_input') {
+            console.log('Processing voice input, language:', data.language);
+            
+            try {
+              // Send acknowledgment that processing has started
+              ws.send(JSON.stringify({
+                type: 'processing_started',
+                message: 'Your voice is being processed...'
+              }));
+              
+              // Use session ID if provided or create a unique one
+              const sessionId = data.sessionId || 
+                               `session_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+              
+              const result = await processVoiceInput(
+                Buffer.from(data.audio, 'base64'),
+                data.language || 'te',
+                sessionId
+              );
+
+              console.log('Voice processing completed, sending response');
+              ws.send(JSON.stringify({
+                type: 'ai_response',
+                content: result,
+                sessionId: sessionId
+              }));
+            } catch (voiceError: any) {
+              console.error('Voice processing error:', voiceError);
+              ws.send(JSON.stringify({
+                type: 'error',
+                message: `Voice processing failed: ${voiceError?.message || 'Unknown error'}`
               }));
             }
-          });
+          }
+          
+          // This section is from the original code and needs to be kept for backward compatibility
+          else if (data.type === 'transcript') {
+            // Echo back the transcript to all connected clients
+            wss.clients.forEach((client) => {
+              if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({
+                  type: 'response',
+                  content: `Received: ${data.content}`
+                }));
+              }
+            });
+          }
         }
       } catch (error) {
         console.error('WebSocket message handling error:', error);
