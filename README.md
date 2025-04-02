@@ -51,6 +51,10 @@ AgriBuddy is a multilingual, AI-powered farming platform that provides comprehen
 
 ## Project Structure
 
+The project is available in two structures:
+
+### Original Structure (Replit-Optimized)
+
 ```
 agribudddy/
 ├── client/            # Frontend React application
@@ -78,10 +82,20 @@ agribudddy/
 │
 ├── public/            # Static files
 ├── docs/              # Documentation
-├── scripts/           # Utility scripts
-├── .env               # Environment variables (create this file)
-├── package.json       # Project dependencies
-└── README.md          # Project documentation
+└── scripts/           # Utility scripts
+```
+
+### Restructured Version (VS Code/GitHub-Optimized)
+
+The `restructured/` directory contains a version of the application that follows a more traditional full-stack project structure with clear separation between frontend and backend. See [restructured/README.md](restructured/README.md) for detailed documentation.
+
+```
+restructured/
+├── backend/           # Backend server code
+│   └── src/           # Server source files
+├── frontend/          # Frontend React application
+│   └── src/           # Frontend source files
+└── shared/            # Shared code between frontend and backend
 ```
 
 ## Technology Stack
@@ -91,6 +105,7 @@ agribudddy/
 - **Database**: PostgreSQL, Drizzle ORM
 - **AI**: OpenAI API (GPT-4o, Whisper, DALL-E 3)
 - **Authentication**: Passport.js
+- **Real-time**: WebSockets for voice interaction
 
 ## Contributing
 

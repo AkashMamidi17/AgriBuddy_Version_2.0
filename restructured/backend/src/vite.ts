@@ -1,88 +1,81 @@
-import express, { type Express } from "express";
+import express, { Express } from "express";
+import { Server } from "http";
+import { createServer as createViteServer, ViteDevServer } from "vite";
+import path from "path";
 import fs from "fs";
-import path, { dirname } from "path";
-import { fileURLToPath } from "url";
-import { createServer as createViteServer, createLogger } from "vite";
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-import { type Server } from "http";
-import viteConfig from "../../../vite.config.js";
-import { nanoid } from "nanoid";
 
-const viteLogger = createLogger();
-
+// Logger function for better formatted logs
 export function log(message: string, source = "express") {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-
-  console.log(`${formattedTime} [${source}] ${message}`);
+  const timestamp = new Date().toLocaleTimeString();
+  console.log(`${timestamp} [${source}] ${message}`);
 }
 
+// Setup Vite middleware for development
 export async function setupVite(app: Express, server: Server) {
-  const serverOptions = {
-    middlewareMode: true,
-    hmr: { server },
-    allowedHosts: ["localhost", "0.0.0.0"],
-  };
-
-  const vite = await createViteServer({
-    ...viteConfig,
-    configFile: false,
-    customLogger: {
-      ...viteLogger,
-      error: (msg, options) => {
-        viteLogger.error(msg, options);
-        process.exit(1);
-      },
-    },
-    server: serverOptions,
-    appType: "custom",
-  });
-
-  app.use(vite.middlewares);
-  app.use("*", async (req, res, next) => {
-    const url = req.originalUrl;
-
-    try {
-      const clientTemplate = path.resolve(
-        __dirname,
-        "../../../",
-        "client",
-        "index.html",
-      );
-
-      // always reload the index.html file from disk incase it changes
-      let template = await fs.promises.readFile(clientTemplate, "utf-8");
-      template = template.replace(
-        `src="/src/main.tsx"`,
-        `src="/src/main.tsx?v=${nanoid()}"`,
-      );
-      const page = await vite.transformIndexHtml(url, template);
-      res.status(200).set({ "Content-Type": "text/html" }).end(page);
-    } catch (e) {
-      vite.ssrFixStacktrace(e as Error);
-      next(e);
-    }
-  });
+  log("Setting up Vite middleware");
+  
+  try {
+    // Create Vite server instance
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'custom'
+    });
+    
+    // Use Vite's middleware for development
+    app.use(vite.middlewares);
+    
+    // Handle SPA routing - let the frontend router handle routes
+    app.use("*", async (req, res, next) => {
+      // Skip API routes - these are handled by express
+      if (req.originalUrl.startsWith("/api") || req.originalUrl.startsWith("/ws")) {
+        return next();
+      }
+      
+      try {
+        const url = req.originalUrl;
+        
+        // Read index.html from the frontend directory
+        let template = fs.readFileSync(
+          path.resolve("./client/index.html"),
+          "utf-8"
+        );
+        
+        // Apply Vite HTML transforms - this injects HMR and other dev features
+        template = await vite.transformIndexHtml(url, template);
+        
+        // Send the transformed HTML as response
+        res.status(200).set({ "Content-Type": "text/html" }).end(template);
+      } catch (err) {
+        // Let Vite handle errors in dev mode
+        vite.ssrFixStacktrace(err as Error);
+        next(err);
+      }
+    });
+    
+    log("Vite middleware setup complete");
+  } catch (err) {
+    log(`Vite setup failed: ${(err as Error).message}`, "error");
+    throw err;
+  }
 }
 
+// Serve static files in production mode
 export function serveStatic(app: Express) {
-  const distPath = path.resolve(__dirname, "public");
-
-  if (!fs.existsSync(distPath)) {
-    throw new Error(
-      `Could not find the build directory: ${distPath}, make sure to build the client first`,
-    );
-  }
-
-  app.use(express.static(distPath));
-
-  // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
+  log("Setting up static file serving for production");
+  
+  // Serve static assets
+  app.use(express.static(path.resolve("./client/dist")));
+  
+  // Handle SPA routing for production
+  app.get("*", (req, res, next) => {
+    // Skip API routes
+    if (req.path.startsWith("/api") || req.path.startsWith("/ws")) {
+      return next();
+    }
+    
+    // Serve the index.html for all non-API routes
+    res.sendFile(path.resolve("./client/dist/index.html"));
   });
+  
+  log("Static file serving setup complete");
 }

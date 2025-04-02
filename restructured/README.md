@@ -1,93 +1,92 @@
-# AgriBuddy: Restructured Project
+# AgriBuddy - Restructured Version
 
-This directory contains the restructured version of the AgriBuddy project, with a proper separation of frontend and backend code.
+This folder contains the restructured version of the AgriBuddy application, with a cleaner separation between frontend and backend code to make it more maintainable and compatible with standard development workflows.
 
 ## Project Structure
 
 ```
 restructured/
-├── backend/
+├── backend/                 # Backend server code
 │   ├── src/
-│   │   ├── ai-assistant.ts     # Multilingual AI voice assistant (Telugu support)
-│   │   ├── auth.ts             # Authentication with user registration
-│   │   ├── db.ts               # Database connection using Drizzle ORM
-│   │   ├── index.ts            # Main Express application entry point
-│   │   ├── routes.ts           # API and WebSocket routes
-│   │   ├── storage.ts          # Data storage implementation
-│   │   ├── types.ts            # TypeScript interfaces and types
-│   │   └── vite.ts             # Vite integration for development
-│   └── drizzle.config.ts       # Drizzle ORM configuration
-├── frontend/
+│   │   ├── ai-assistant.ts  # Voice assistant implementation
+│   │   ├── auth.ts          # Authentication logic
+│   │   ├── db.ts            # Database connection
+│   │   ├── index.ts         # Server entry point
+│   │   ├── routes.ts        # API routes and WebSocket handling
+│   │   ├── storage.ts       # Data storage implementation
+│   │   ├── types.ts         # TypeScript interfaces
+│   │   └── vite.ts          # Vite integration
+│   └── package.json         # Backend dependencies
+│
+├── frontend/                # Frontend React application
 │   ├── src/
-│   │   ├── components/         # React UI components
-│   │   │   ├── feature-sections/
-│   │   │   │   ├── crop-management.tsx
-│   │   │   │   ├── equipment-section.tsx
-│   │   │   │   ├── market-insights.tsx
-│   │   │   │   └── weather-updates.tsx
-│   │   │   ├── ui/             # Shadcn UI components
-│   │   │   ├── product-card.tsx
-│   │   │   ├── voice-assistant.tsx
-│   │   │   └── navbar.tsx
-│   │   ├── hooks/              # Custom React hooks
-│   │   │   ├── use-websocket.ts
-│   │   │   ├── use-auth.tsx
-│   │   │   ├── use-mobile.tsx
-│   │   │   └── use-toast.ts
-│   │   ├── lib/                # Utility functions
-│   │   ├── pages/              # Main application pages
-│   │   │   ├── home-page.tsx
-│   │   │   ├── auth-page.tsx
-│   │   │   ├── community.tsx
-│   │   │   ├── marketplace.tsx
-│   │   │   └── not-found.tsx
-│   │   ├── App.tsx
-│   │   ├── index.css
-│   │   └── main.tsx
-│   ├── public/                 # Static assets
-│   ├── index.html              # HTML entry point
-│   ├── tailwind.config.ts      # Tailwind CSS configuration
-│   └── postcss.config.js       # PostCSS configuration
-└── shared/
-    └── schema.ts               # Shared database schema and types
+│   │   ├── components/      # React components
+│   │   │   ├── feature-sections/  # Feature section components
+│   │   │   ├── ui/          # UI components (shadcn)
+│   │   │   └── ...          # Additional components
+│   │   ├── hooks/           # Custom React hooks
+│   │   ├── lib/             # Utility functions
+│   │   ├── pages/           # Page components
+│   │   └── ...              # Other frontend files
+│   ├── public/              # Public assets
+│   └── package.json         # Frontend dependencies
+│
+└── shared/                  # Shared code between frontend and backend
+    └── schema.ts            # Database schema definitions
 ```
 
 ## Key Features
 
-1. **Multilingual Voice Assistant**: Primary support for Telugu language with fallback to English
-2. **Profile Creation via Voice**: Users can create profiles through voice interaction
-3. **Real-time Features**: WebSocket integration for bidding and voice processing
-4. **Database Integration**: PostgreSQL with Drizzle ORM
-5. **Community Platform**: Farmers can share knowledge and experiences
-6. **Marketplace**: Platform for farmers to sell produce with bidding functionality
-7. **Responsive Design**: Mobile-first approach for rural farmers
+1. **Voice Assistant**: Multilingual AI assistant with Telugu language support
+2. **Marketplace**: Platform for farmers to sell products and equipment
+3. **Community**: Forum for farmers to share knowledge and experiences
+4. **Crop Management**: Tools for monitoring and managing crops
+5. **Weather Updates**: Real-time weather information
+6. **Market Insights**: Price trends and market information
 
-## Technical Implementation
+## Technology Stack
 
-- **Backend**: Express.js with TypeScript
-- **Frontend**: React with TypeScript and Shadcn UI components
+- **Frontend**: React, TypeScript, TailwindCSS, shadcn/ui
+- **Backend**: Node.js, Express, TypeScript
 - **Database**: PostgreSQL with Drizzle ORM
-- **Authentication**: Passport.js with local strategy
-- **AI Integration**: OpenAI GPT-4o for voice assistance
-- **Real-time Communication**: WebSocket for voice and bidding
+- **Real-time Communication**: WebSockets (ws)
+- **AI Integration**: OpenAI API with local fallback capabilities
 
 ## Getting Started
 
+### Prerequisites
+
+- Node.js 18+
+- PostgreSQL database
+- OpenAI API key (optional, local fallback available)
+
+### Running the Application
+
 1. Install dependencies:
    ```
-   npm install
+   cd restructured/backend && npm install
+   cd restructured/frontend && npm install
    ```
 
 2. Set up environment variables:
-   ```
-   SESSION_SECRET=your_session_secret
-   DATABASE_URL=your_postgres_connection_string
-   OPENAI_API_KEY=your_openai_api_key (optional - will use local fallback if not provided)
-   ```
+   - Create a `.env` file in the backend directory with:
+     ```
+     DATABASE_URL=postgres://username:password@localhost:5432/agribuddy
+     OPENAI_API_KEY=your_openai_api_key (optional)
+     ```
 
 3. Start the development server:
    ```
-   npm run dev
+   # Backend
+   cd restructured/backend && npm run dev
+   
+   # Frontend
+   cd restructured/frontend && npm run dev
    ```
 
-4. Access the application at `http://localhost:5000`
+## Development Notes
+
+- The AI assistant can operate in a local fallback mode if the OpenAI API key is not available
+- WebSocket connections are automatically reconnected if the connection is lost
+- User authentication is session-based with secure password hashing
+- The database schema uses Drizzle ORM for type-safe queries

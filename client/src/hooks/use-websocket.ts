@@ -17,6 +17,14 @@ export function useWebSocket(url: string) {
     // Calculate actual WebSocket URL if not specified
     const actualUrl = url || (() => {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      
+      // Handle Replit environment
+      if (window.location.host.includes('.replit.dev')) {
+        console.log('Detected Replit environment');
+        // In Replit, we need to use the window location but change the path to /ws
+        return `${protocol}//${window.location.host}/ws`;
+      }
+      
       return `${protocol}//${window.location.host}/ws`;
     })();
     
