@@ -1,4 +1,5 @@
 # Responsive Website with Marketplace and Community Features
+# AgriBuddy Project is to create an AI Assistant for Farmers to help in Agriculture and to use AI to its extent to help Farmers. 
 
 A full-stack web application built with React, TypeScript, and Express.js that includes marketplace and community features.
 
