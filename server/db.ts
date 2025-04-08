@@ -1,15 +1,71 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import ws from "ws";
-import * as schema from "./shared/schema";
+import dotenv from 'dotenv';
 
-neonConfig.webSocketConstructor = ws;
+dotenv.config();
 
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
-  );
+class InMemoryDB {
+  private users: any[] = [];
+  private products: any[] = [];
+  private posts: any[] = [];
+  private nextId = 1;
+
+  async query(sql: string, params?: any[]) {
+    // For development, just return empty results
+    return [[], []];
+  }
+
+  // Helper methods for CRUD operations
+  async createUser(user: any) {
+    const newUser = { ...user, id: this.nextId++ };
+    this.users.push(newUser);
+    return newUser;
+  }
+
+  async getUser(id: number) {
+    return this.users.find(u => u.id === id);
+  }
+
+  async getUserByUsername(username: string) {
+    return this.users.find(u => u.username === username);
+  }
+
+  async createProduct(product: any) {
+    const newProduct = { ...product, id: this.nextId++ };
+    this.products.push(newProduct);
+    return newProduct;
+  }
+
+  async getProduct(id: number) {
+    return this.products.find(p => p.id === id);
+  }
+
+  async getAllProducts() {
+    return this.products;
+  }
+
+  async createPost(post: any) {
+    const newPost = { ...post, id: this.nextId++ };
+    this.posts.push(newPost);
+    return newPost;
+  }
+
+  async getPost(id: number) {
+    return this.posts.find(p => p.id === id);
+  }
+
+  async getAllPosts() {
+    return this.posts;
+  }
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-export const db = drizzle({ client: pool, schema });
+const db = new InMemoryDB();
+
+export const setupDatabase = async () => {
+  try {
+    console.log('Using in-memory database for development');
+  } catch (error) {
+    console.error('Error setting up in-memory database:', error);
+    throw error;
+  }
+};
+
+export default db;

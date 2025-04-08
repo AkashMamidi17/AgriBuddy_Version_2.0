@@ -1,46 +1,124 @@
-import express, { Request, Response, NextFunction } from "express";
+import express from "express";
 import cors from "cors";
-import { registerRoutes } from "./routes";
-import { log, setupVite, serveStatic } from "./vite";
-import "dotenv/config";
+import { setupAuth, setupAuthRoutes } from "./auth.js";
+import { registerRoutes } from "./routes.js";
+import { createServer } from "http";
+import { Server } from "socket.io";
+import path from "path";
+import { setupVite } from './vite.js';
+import { setupWebSocket } from './websocket.js';
+import session from 'express-session';
+import passport from 'passport';
+import { setupDatabase } from './db.js';
+import dotenv from 'dotenv';
+import { MemStorage } from "./storage.js";
 
-async function main() {
-  const app = express();
-  
-  // Configure middleware
-  app.use(cors());
-  app.use(express.json()); // for parsing application/json
-  
-  // Register API routes
-  const server = await registerRoutes(app);
-  
-  // Set up error handling
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    console.error("Server error:", err);
-    res.status(500).json({
-      message: "Internal server error",
-      error: process.env.NODE_ENV === "production" ? undefined : err.message,
-    });
-  });
-  
-  // Set up Vite for development and production
-  if (process.env.NODE_ENV === "production") {
-    log("Setting up static file serving for production");
-    serveStatic(app);
-  } else {
-    log("Setting up Vite dev server");
-    await setupVite(app, server);
+dotenv.config();
+
+const app = express();
+const httpServer = createServer(app);
+
+// Enable CORS
+app.use(cors({
+  origin: ["http://localhost:3001", "http://localhost:3000"],
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+}));
+
+// Parse JSON bodies
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Session configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: 'lax'
   }
+}));
 
-  // Get port from environment or use 5000 to match Replit's workflow expectations
-  const PORT = process.env.PORT || 5000;
-  
-  server.listen(PORT, () => {
-    log(`Server listening on port ${PORT}`);
-  });
+// Initialize passport and auth
+setupAuth(app);
+setupAuthRoutes(app);
+
+// Initialize Socket.IO with CORS
+const io = new Server(httpServer, {
+  cors: {
+    origin: ["http://localhost:3001", "http://localhost:3000"],
+    methods: ["GET", "POST"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+  },
+  path: '/socket.io'
+});
+
+// Setup WebSocket with CORS
+const wss = setupWebSocket(httpServer);
+
+// Setup database
+setupDatabase();
+
+// Initialize storage
+const storage = new MemStorage();
+
+// Setup other routes
+registerRoutes(app, io);
+
+// Setup Vite in development mode
+if (process.env.NODE_ENV === 'development') {
+  app.use(express.static(path.join(process.cwd(), 'client/dist')));
+} else {
+  app.use(express.static(path.join(process.cwd(), 'client/dist')));
 }
 
-main().catch((err) => {
-  console.error("Failed to start server:", err);
-  process.exit(1);
+// WebSocket connection handling
+io.on("connection", (socket) => {
+  console.log("Client connected:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("Client disconnected:", socket.id);
+  });
+
+  socket.on("error", (error) => {
+    console.error("WebSocket error:", error);
+  });
 });
+
+// Error handling
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error(err.stack);
+  res.status(500).json({ error: "Something broke!" });
+});
+
+const startServer = async () => {
+  const port = Number(process.env.PORT) || 5000;
+  
+  try {
+    if (process.env.NODE_ENV === "development") {
+      await setupVite(app, httpServer);
+    }
+
+    httpServer.listen(port, () => {
+      console.log(`Server running on port ${port}`);
+      console.log(`WebSocket server running on ws://localhost:${port}/ws`);
+      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    });
+  } catch (error: any) {
+    if (error?.code === 'EADDRINUSE') {
+      const newPort = port + 1;
+      console.log(`Port ${port} is in use, trying port ${newPort}`);
+      httpServer.listen(newPort);
+    } else {
+      console.error('Server error:', error);
+      process.exit(1);
+    }
+  }
+};
+
+startServer();

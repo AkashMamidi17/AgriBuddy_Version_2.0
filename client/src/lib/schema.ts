@@ -73,4 +73,17 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type Bid = typeof bids.$inferSelect;
-export type Post = typeof posts.$inferSelect; 
+export type Post = {
+  id: number;
+  title: string;
+  content: string;
+  videoUrl?: string;
+  videoThumbnail?: string;
+  videoDuration?: number;
+  likes: number;
+  shares: number;
+  saves: number;
+  userId: number;
+  createdAt: Date;
+  updatedAt: Date;
+}; 

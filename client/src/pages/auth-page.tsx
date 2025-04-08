@@ -1,161 +1,173 @@
+import { useState } from "react";
+import { useLocation, Redirect } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { insertUserSchema } from "@shared/schema";
-import { Redirect } from "wouter";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AuthPage() {
+  const [isLogin, setIsLogin] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { user, loginMutation, registerMutation } = useAuth();
+  const [location, setLocation] = useLocation();
+  const { toast } = useToast();
 
-  const loginForm = useForm({
-    defaultValues: {
-      username: "",
-      password: "",
-    },
-  });
-
-  const registerForm = useForm({
-    resolver: zodResolver(insertUserSchema),
-    defaultValues: {
-      username: "",
-      password: "",
-      name: "",
-      userType: "farmer",
-      location: "",
-    },
-  });
-
+  // Redirect if already logged in
   if (user) {
     return <Redirect to="/" />;
   }
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    const formData = new FormData(e.target as HTMLFormElement);
+    const data = Object.fromEntries(formData.entries());
+
+    try {
+      if (isLogin) {
+        await loginMutation.mutateAsync({
+          username: data.username as string,
+          password: data.password as string,
+        });
+      } else {
+        await registerMutation.mutateAsync({
+          username: data.username as string,
+          password: data.password as string,
+          name: data.name as string,
+          userType: data.userType as "farmer" | "buyer",
+          location: data.location as string,
+        });
+      }
+      setLocation("/");
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("An unexpected error occurred");
+      }
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">
-      <div className="max-w-6xl w-full grid md:grid-cols-2 gap-8">
-        <div className="space-y-6">
-          <h1 className="text-4xl font-bold text-green-800">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <Card className="w-[400px] shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold text-center text-green-700">
             Welcome to AgriBuddy
-          </h1>
-          <p className="text-lg text-gray-600">
-            Join our community of farmers and consumers. Share knowledge, trade
-            produce, and grow together.
-          </p>
-        </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md">
+              {error}
+            </div>
+          )}
+          <Tabs defaultValue="login" onValueChange={(value) => setIsLogin(value === "login")}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="login">Login</TabsTrigger>
+              <TabsTrigger value="register">Register</TabsTrigger>
+            </TabsList>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Authentication</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="login">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="login">Login</TabsTrigger>
-                <TabsTrigger value="register">Register</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="login">
-                <form
-                  onSubmit={loginForm.handleSubmit((data) =>
-                    loginMutation.mutate(data)
-                  )}
-                  className="space-y-4"
-                >
-                  <div>
-                    <Label htmlFor="username">Username</Label>
-                    <Input
-                      id="username"
-                      {...loginForm.register("username")}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="password">Password</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      {...loginForm.register("password")}
-                    />
-                  </div>
-                  <Button
-                    type="submit"
+            <TabsContent value="login">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    name="username"
+                    type="text"
+                    required
                     className="w-full"
-                    disabled={loginMutation.isPending}
-                  >
-                    Login
-                  </Button>
-                </form>
-              </TabsContent>
-
-              <TabsContent value="register">
-                <form
-                  onSubmit={registerForm.handleSubmit((data) =>
-                    registerMutation.mutate(data)
-                  )}
-                  className="space-y-4"
-                >
-                  <div>
-                    <Label htmlFor="reg-username">Username</Label>
-                    <Input
-                      id="reg-username"
-                      {...registerForm.register("username")}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="reg-password">Password</Label>
-                    <Input
-                      id="reg-password"
-                      type="password"
-                      {...registerForm.register("password")}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="name">Full Name</Label>
-                    <Input
-                      id="name"
-                      {...registerForm.register("name")}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="userType">I am a</Label>
-                    <Select
-                      onValueChange={(value) =>
-                        registerForm.setValue("userType", value)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select user type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="farmer">Farmer</SelectItem>
-                        <SelectItem value="consumer">Consumer</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="location">Location</Label>
-                    <Input
-                      id="location"
-                      {...registerForm.register("location")}
-                    />
-                  </div>
-                  <Button
-                    type="submit"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    name="password"
+                    type="password"
+                    required
                     className="w-full"
-                    disabled={registerMutation.isPending}
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white transition-colors duration-200"
+                  disabled={loginMutation.isPending}
+                >
+                  {loginMutation.isPending ? "Logging in..." : "Login"}
+                </Button>
+              </form>
+            </TabsContent>
+
+            <TabsContent value="register">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    name="username"
+                    type="text"
+                    required
+                    className="w-full"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    name="password"
+                    type="password"
+                    required
+                    className="w-full"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="name">Full Name</Label>
+                  <Input
+                    id="name"
+                    name="name"
+                    type="text"
+                    required
+                    className="w-full"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="userType">User Type</Label>
+                  <select
+                    id="userType"
+                    name="userType"
+                    required
+                    className="w-full p-2 border rounded-md"
                   >
-                    Register
-                  </Button>
-                </form>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-      </div>
+                    <option value="farmer">Farmer</option>
+                    <option value="buyer">Buyer</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="location">Location (Optional)</Label>
+                  <Input
+                    id="location"
+                    name="location"
+                    type="text"
+                    className="w-full"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white transition-colors duration-200"
+                  disabled={registerMutation.isPending}
+                >
+                  {registerMutation.isPending ? "Registering..." : "Register"}
+                </Button>
+              </form>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
     </div>
   );
 }

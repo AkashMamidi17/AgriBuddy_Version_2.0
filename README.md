@@ -1,115 +1,95 @@
-# AgriBuddy: Agricultural Support Platform
+# Responsive Website with Marketplace and Community Features
 
-AgriBuddy is a multilingual, AI-powered farming platform that provides comprehensive agricultural support through integrated technologies.
+A full-stack web application built with React, TypeScript, and Express.js that includes marketplace and community features.
 
 ## Features
 
-- **Voice Assistant**: Multilingual support (Telugu, English, Hindi) with AI-powered responses
-- **Marketplace**: Buy/sell agricultural products with bidding functionality
-- **Community**: Share knowledge, videos, and posts with other farmers
-- **Crop Management**: Track and manage your crops with expert advice
-- **Equipment Tracking**: Monitor and maintain farming equipment
-- **Weather Updates**: Get real-time weather information relevant to farming
-- **Market Insights**: Track pricing trends and market opportunities
+- User authentication (login/register)
+- Marketplace for product listings and bidding
+- Community page with video sharing
+- Responsive design
+- Real-time updates
 
-## Installation
+## Tech Stack
+
+- Frontend: React, TypeScript, Vite
+- Backend: Express.js, TypeScript
+- Authentication: Passport.js
+- Database: In-memory storage (for demo purposes)
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v14 or higher)
+- npm or yarn
+
+### Installation
 
 1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/agribudddy.git
-   cd agribudddy
-   ```
+```bash
+git clone <your-repo-url>
+cd ResponsiveWebsite
+```
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+2. Install dependencies for both client and server:
+```bash
+# Install client dependencies
+cd client
+npm install
 
-3. Create a .env file in the project root with the following variables:
-   ```
-   DATABASE_URL=your_postgres_db_url
-   OPENAI_API_KEY=your_openai_api_key
-   SESSION_SECRET=your_session_secret
-   ```
+# Install server dependencies
+cd ../server
+npm install
+```
 
-4. Set up the database:
-   ```bash
-   npm run db:push
-   ```
+3. Create a `.env` file in the server directory with the following variables:
+```
+PORT=5000
+NODE_ENV=development
+SESSION_SECRET=your-secret-key
+```
 
-5. Start the development server:
-   ```bash
-   npm run dev
-   ```
+4. Start the development servers:
+```bash
+# Start the backend server
+cd server
+npm run dev
 
-6. Open your browser and navigate to `http://localhost:5000`
+# Start the frontend server (in a new terminal)
+cd client
+npm run dev
+```
 
-## User Roles
-
-- **Farmers**: Can access all features including crop management, equipment tracking, marketplace listings
-- **Consumers**: Can access marketplace, community posts, and contact farmers
+The application will be available at:
+- Frontend: http://localhost:3001
+- Backend: http://localhost:5000
 
 ## Project Structure
 
-The project is available in two structures:
-
-### Original Structure (Replit-Optimized)
-
 ```
-agribudddy/
-├── client/            # Frontend React application
+ResponsiveWebsite/
+├── client/                 # Frontend React application
 │   ├── src/
-│   │   ├── components/  # Reusable UI components
-│   │   ├── hooks/       # Custom React hooks
-│   │   ├── lib/         # Utility functions and libraries
-│   │   ├── pages/       # Application pages
-│   │   ├── App.tsx      # Main application component
-│   │   └── main.tsx     # Entry point
-│   └── index.html      # HTML template
-│
-├── server/            # Backend Express server
-│   ├── ai-assistant.ts  # Voice assistant implementation
-│   ├── auth.ts          # Authentication logic
-│   ├── db.ts            # Database connection
-│   ├── routes.ts        # API routes
-│   ├── storage.ts       # Data storage interface
-│   ├── types.ts         # TypeScript types
-│   ├── index.ts         # Server entry point
-│   └── vite.ts          # Vite configuration
-│
-├── shared/            # Shared code between client and server
-│   └── schema.ts       # Database schema definitions
-│
-├── public/            # Static files
-├── docs/              # Documentation
-└── scripts/           # Utility scripts
+│   │   ├── components/    # Reusable UI components
+│   │   ├── pages/        # Page components
+│   │   ├── hooks/        # Custom React hooks
+│   │   └── lib/          # Utility functions
+├── server/                # Backend Express application
+│   ├── src/
+│   │   ├── routes/       # API routes
+│   │   ├── middleware/   # Express middleware
+│   │   └── models/       # Data models
+└── README.md
 ```
-
-### Restructured Version (VS Code/GitHub-Optimized)
-
-The `restructured/` directory contains a version of the application that follows a more traditional full-stack project structure with clear separation between frontend and backend. See [restructured/README.md](restructured/README.md) for detailed documentation.
-
-```
-restructured/
-├── backend/           # Backend server code
-│   └── src/           # Server source files
-├── frontend/          # Frontend React application
-│   └── src/           # Frontend source files
-└── shared/            # Shared code between frontend and backend
-```
-
-## Technology Stack
-
-- **Frontend**: React, TypeScript, Tailwind CSS, Shadcn UI
-- **Backend**: Node.js, Express, TypeScript
-- **Database**: PostgreSQL, Drizzle ORM
-- **AI**: OpenAI API (GPT-4o, Whisper, DALL-E 3)
-- **Authentication**: Passport.js
-- **Real-time**: WebSockets for voice interaction
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 

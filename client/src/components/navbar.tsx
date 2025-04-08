@@ -16,28 +16,20 @@ export default function Navbar() {
   return (
     <nav className="border-b">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <NavigationMenu>
-            <NavigationMenuList>
-              <NavigationMenuItem>
-                <Link href="/">
-                  <NavigationMenuLink className="text-xl font-bold">
-                    AgriBuddy
-                  </NavigationMenuLink>
-                </Link>
-              </NavigationMenuItem>
-              <NavigationMenuItem>
-                <Link href="/marketplace">
-                  <NavigationMenuLink>Marketplace</NavigationMenuLink>
-                </Link>
-              </NavigationMenuItem>
-              <NavigationMenuItem>
-                <Link href="/community">
-                  <NavigationMenuLink>Community</NavigationMenuLink>
-                </Link>
-              </NavigationMenuItem>
-            </NavigationMenuList>
-          </NavigationMenu>
+        <div className="flex justify-between items-center h-16">
+          <div className="flex items-center space-x-8">
+            <Link href="/" className="text-2xl font-bold text-green-600">
+              AgriBuddy
+            </Link>
+            <div className="hidden md:flex items-center space-x-8">
+              <Link href="/marketplace" className="text-gray-700 hover:text-gray-900">
+                Marketplace
+              </Link>
+              <Link href="/community" className="text-gray-700 hover:text-gray-900">
+                Community
+              </Link>
+            </div>
+          </div>
 
           <div className="flex items-center">
             <span className="mr-4">Welcome, {user.name}</span>

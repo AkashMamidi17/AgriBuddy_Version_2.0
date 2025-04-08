@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import VoiceAssistant from "@/components/voice-assistant";
+import { VoiceAssistant } from "@/components/voice-assistant";
 import CropManagement from "@/components/feature-sections/crop-management";
 import EquipmentSection from "@/components/feature-sections/equipment-section";
 import WeatherUpdates from "@/components/feature-sections/weather-updates";

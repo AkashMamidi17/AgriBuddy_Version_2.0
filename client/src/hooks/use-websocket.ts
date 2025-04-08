@@ -5,28 +5,26 @@ type Message = {
   payload: any;
 };
 
-export function useWebSocket(url: string) {
+interface WebSocketConfig {
+  onOpen?: () => void;
+  onClose?: () => void;
+  onError?: (error: Event) => void;
+}
+
+export function useWebSocket(url: string, config?: WebSocketConfig) {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
+  const maxReconnectAttempts = 5;
   
   // Connect to WebSocket with automatic reconnection
   useEffect(() => {
-    // Calculate actual WebSocket URL if not specified
-    const actualUrl = url || (() => {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      
-      // Handle Replit environment
-      if (window.location.host.includes('.replit.dev')) {
-        console.log('Detected Replit environment');
-        // In Replit, we need to use the window location but change the path to /ws
-        return `${protocol}//${window.location.host}/ws`;
-      }
-      
-      return `${protocol}//${window.location.host}/ws`;
-    })();
+    // Calculate actual WebSocket URL
+    const actualUrl = url.startsWith('ws://') || url.startsWith('wss://') 
+      ? url 
+      : `ws://${window.location.hostname}:5000/ws`;
     
     // Clean up any existing connection
     if (wsRef.current) {
@@ -47,27 +45,32 @@ export function useWebSocket(url: string) {
       setIsConnected(true);
       setError(null);
       setReconnectAttempt(0);
+      config?.onOpen?.();
     };
     
     ws.onclose = (event) => {
       console.log(`WebSocket disconnected: ${event.code} - ${event.reason}`);
       setIsConnected(false);
+      config?.onClose?.();
       
-      // Only attempt to reconnect if not a normal closure
-      if (event.code !== 1000 && event.code !== 1001) {
+      // Only attempt to reconnect if not a normal closure and under max attempts
+      if (event.code !== 1000 && event.code !== 1001 && reconnectAttempt < maxReconnectAttempts) {
         // Exponential backoff for reconnect (max 30 seconds)
-        const delay = Math.min(1000 * (Math.pow(1.5, reconnectAttempt) + Math.random()), 30000);
+        const delay = Math.min(1000 * (Math.pow(2, reconnectAttempt) + Math.random()), 30000);
         console.log(`Attempting to reconnect in ${delay}ms...`);
         
         reconnectTimeoutRef.current = window.setTimeout(() => {
           setReconnectAttempt(prev => prev + 1);
         }, delay);
+      } else if (reconnectAttempt >= maxReconnectAttempts) {
+        setError('Maximum reconnection attempts reached. Please refresh the page.');
       }
     };
     
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
+    ws.onerror = (event) => {
+      console.error('WebSocket error:', event);
       setError('Failed to connect to WebSocket server');
+      config?.onError?.(event);
     };
     
     wsRef.current = ws;
@@ -79,7 +82,7 @@ export function useWebSocket(url: string) {
       ws.close();
       wsRef.current = null;
     };
-  }, [url, reconnectAttempt]);
+  }, [url, reconnectAttempt, config]);
   
   // Send a JSON message through WebSocket
   const sendJsonMessage = useCallback((type: string, payload: any) => {
@@ -96,25 +99,31 @@ export function useWebSocket(url: string) {
   // Send a binary message (for audio) through WebSocket
   const sendBinaryMessage = useCallback((data: ArrayBuffer, sessionId?: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      // If session ID is provided, prefix it to the binary data
-      if (sessionId) {
-        const encoder = new TextEncoder();
-        const sessionIdBytes = encoder.encode(`${sessionId}:`);
-        
-        // Create a new ArrayBuffer with room for both the session ID and the audio data
-        const combinedBuffer = new ArrayBuffer(sessionIdBytes.byteLength + data.byteLength);
-        const combinedArray = new Uint8Array(combinedBuffer);
-        
-        // Add session ID bytes and audio data to the combined buffer
-        combinedArray.set(sessionIdBytes, 0);
-        combinedArray.set(new Uint8Array(data), sessionIdBytes.byteLength);
-        
-        wsRef.current.send(combinedBuffer);
-      } else {
-        // Send data directly if no session ID
-        wsRef.current.send(data);
+      try {
+        // If session ID is provided, prefix it to the binary data
+        if (sessionId) {
+          const encoder = new TextEncoder();
+          const sessionIdBytes = encoder.encode(`${sessionId}:`);
+          
+          // Create a new ArrayBuffer with room for both the session ID and the audio data
+          const combinedBuffer = new ArrayBuffer(sessionIdBytes.byteLength + data.byteLength);
+          const combinedArray = new Uint8Array(combinedBuffer);
+          
+          // Add session ID bytes and audio data to the combined buffer
+          combinedArray.set(sessionIdBytes, 0);
+          combinedArray.set(new Uint8Array(data), sessionIdBytes.byteLength);
+          
+          wsRef.current.send(combinedBuffer);
+        } else {
+          // Send data directly if no session ID
+          wsRef.current.send(data);
+        }
+        return true;
+      } catch (err) {
+        console.error('Failed to send binary message:', err);
+        setError('Failed to send audio data');
+        return false;
       }
-      return true;
     } else {
       setError('WebSocket is not connected');
       return false;

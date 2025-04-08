@@ -1,0 +1,11 @@
+{
+  "name": "@shared/schema",
+  "version": "1.0.0",
+  "private": true,
+  "main": "schema.ts",
+  "dependencies": {
+    "drizzle-orm": "^0.29.3",
+    "drizzle-zod": "^0.4.1",
+    "zod": "^3.22.4"
+  }
+} 
